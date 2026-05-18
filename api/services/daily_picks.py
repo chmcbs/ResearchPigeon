@@ -94,23 +94,14 @@ def generate_daily_picks_payload(
     request,
     get_arxiv_categories: Callable[[], list[str]],
     resolve_profile: Callable[[str, str | None], dict],
-    list_digest_selected_profile_ids: Callable[[str], list[str]],
     run_pipeline: Callable[..., dict],
     get_daily_picks_payload: Callable[[str, str | None], dict],
 ) -> dict:
     ensure_single_category_mvp(get_arxiv_categories)
 
-    if request.profile_id is not None:
-        profile = resolve_profile(
-            user_id=request.user_id, profile_id=request.profile_id
-        )
-        target_profile_ids = [str(profile["profile_id"])]
-    else:
-        target_profile_ids = list_digest_selected_profile_ids(user_id=request.user_id)
-        if not target_profile_ids:
-            raise BadRequestError(
-                "at least one profile must be selected for digest generation"
-            )
+    target_profile_ids = list(dict.fromkeys(request.profile_ids))
+    for target_profile_id in target_profile_ids:
+        resolve_profile(user_id=request.user_id, profile_id=target_profile_id)
 
     summary = run_pipeline(
         user_id=request.user_id,
@@ -120,7 +111,7 @@ def generate_daily_picks_payload(
     )
     picks_payload = get_daily_picks_payload(
         user_id=request.user_id,
-        profile_id=request.profile_id,
+        profile_id=None,
         run_ids=summary["run_ids"],
     )
 

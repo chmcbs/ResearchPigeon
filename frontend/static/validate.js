@@ -105,15 +105,20 @@ document.getElementById("keywords-remove-btn").addEventListener("click", functio
 
 document.getElementById("generate-btn").addEventListener("click", function () {
   run("generate-out", async function () {
+    var profileIds = document
+      .getElementById("generate-profile-ids")
+      .value.split(",")
+      .map(function (value) { return value.trim(); })
+      .filter(function (value) { return value.length > 0; });
+    if (!profileIds.length) {
+      throw { status: 400, payload: { detail: "profile_ids must contain at least one id" } };
+    }
     var body = {
       user_id: document.getElementById("generate-user-id").value.trim() || "default",
+      profile_ids: profileIds,
       max_results: Number(document.getElementById("generate-max-results").value) || 150,
       embedding_limit: Number(document.getElementById("generate-embedding-limit").value) || 600
     };
-    var profileId = optionalString(document.getElementById("generate-profile-id").value);
-    if (profileId) {
-      body.profile_id = profileId;
-    }
     return apiRequest("/daily-picks/generate", "POST", body);
   });
 });
@@ -134,25 +139,30 @@ document.getElementById("debug-btn").addEventListener("click", function () {
   run("debug-out", async function () {
     var userId = encodeURIComponent(document.getElementById("debug-user-id").value.trim() || "default");
     var profileId = optionalString(document.getElementById("debug-profile-id").value);
-    var query = "/daily-picks/debug?user_id=" + userId;
-    if (profileId) {
-      query += "&profile_id=" + encodeURIComponent(profileId);
+    if (!profileId) {
+      throw { status: 400, payload: { detail: "profile_id is required" } };
     }
+    var query =
+      "/daily-picks/debug?user_id=" +
+      userId +
+      "&profile_id=" +
+      encodeURIComponent(profileId);
     return apiRequest(query, "GET");
   });
 });
 
 document.getElementById("feedback-btn").addEventListener("click", function () {
   run("feedback-out", async function () {
+    var profileId = optionalString(document.getElementById("feedback-profile-id").value);
+    if (!profileId) {
+      throw { status: 400, payload: { detail: "profile_id is required" } };
+    }
     var body = {
       arxiv_id: document.getElementById("feedback-arxiv-id").value.trim(),
       label: document.getElementById("feedback-label").value,
-      user_id: document.getElementById("feedback-user-id").value.trim() || "default"
+      user_id: document.getElementById("feedback-user-id").value.trim() || "default",
+      profile_id: profileId,
     };
-    var profileId = optionalString(document.getElementById("feedback-profile-id").value);
-    if (profileId) {
-      body.profile_id = profileId;
-    }
     return apiRequest("/feedback", "POST", body);
   });
 });

@@ -178,7 +178,7 @@ def test_get_daily_picks_anchored_run_ids_treat_empty_as_generated():
 def test_get_debug_daily_picks_includes_ranking_metadata():
     payload = get_debug_daily_picks_payload(
         user_id="default",
-        profile_id=None,
+        profile_id="profile-1",
         resolve_profile=Mock(return_value={"profile_id": "profile-1"}),
         fetch_latest_picks=Mock(return_value=[_pick_row()]),
     )
@@ -244,12 +244,14 @@ def test_generate_daily_picks_runs_pipeline_and_returns_picks():
     payload = generate_daily_picks_payload(
         GenerateDailyPicksRequest(
             user_id="default",
+            profile_ids=["profile-1", "profile-2"],
             max_results=123,
             embedding_limit=456,
         ),
         get_arxiv_categories=Mock(return_value=["cs.AI"]),
-        resolve_profile=Mock(),
-        list_digest_selected_profile_ids=Mock(return_value=["profile-1", "profile-2"]),
+        resolve_profile=Mock(
+            side_effect=lambda user_id, profile_id: {"profile_id": profile_id}
+        ),
         run_pipeline=run_pipeline,
         get_daily_picks_payload=get_daily_picks,
     )
@@ -297,12 +299,12 @@ def test_generate_daily_picks_allows_zero_recommendations_when_generation_succee
     payload = generate_daily_picks_payload(
         GenerateDailyPicksRequest(
             user_id="default",
+            profile_ids=["profile-1"],
             max_results=123,
             embedding_limit=456,
         ),
         get_arxiv_categories=Mock(return_value=["cs.AI"]),
-        resolve_profile=Mock(),
-        list_digest_selected_profile_ids=Mock(return_value=["profile-1"]),
+        resolve_profile=Mock(return_value={"profile_id": "profile-1"}),
         run_pipeline=Mock(
             return_value={
                 "run_ids": ["run-123"],
@@ -351,10 +353,9 @@ def test_generate_daily_picks_allows_zero_recommendations_when_generation_succee
 def test_generate_daily_picks_fails_when_all_targets_fail():
     with pytest.raises(InternalServerError) as error:
         generate_daily_picks_payload(
-            GenerateDailyPicksRequest(user_id="default"),
+            GenerateDailyPicksRequest(user_id="default", profile_ids=["profile-1"]),
             get_arxiv_categories=Mock(return_value=["cs.AI"]),
-            resolve_profile=Mock(),
-            list_digest_selected_profile_ids=Mock(return_value=["profile-1"]),
+            resolve_profile=Mock(return_value={"profile_id": "profile-1"}),
             run_pipeline=Mock(
                 return_value={
                     "run_ids": ["run-123"],
@@ -388,10 +389,9 @@ def test_generate_daily_picks_fails_when_all_targets_fail():
 def test_generate_daily_picks_rejects_multiple_categories():
     with pytest.raises(BadRequestError) as error:
         generate_daily_picks_payload(
-            GenerateDailyPicksRequest(),
+            GenerateDailyPicksRequest(profile_ids=["profile-1"]),
             get_arxiv_categories=Mock(return_value=["cs.AI", "cs.CL"]),
             resolve_profile=Mock(),
-            list_digest_selected_profile_ids=Mock(return_value=["profile-1"]),
             run_pipeline=Mock(),
             get_daily_picks_payload=Mock(),
         )
@@ -399,18 +399,11 @@ def test_generate_daily_picks_rejects_multiple_categories():
     assert "API MVP" in str(error.value)
 
 
-def test_generate_daily_picks_rejects_when_no_digest_profiles_selected():
-    with pytest.raises(BadRequestError) as error:
-        generate_daily_picks_payload(
-            GenerateDailyPicksRequest(user_id="default"),
-            get_arxiv_categories=Mock(return_value=["cs.AI"]),
-            resolve_profile=Mock(),
-            list_digest_selected_profile_ids=Mock(return_value=[]),
-            run_pipeline=Mock(),
-            get_daily_picks_payload=Mock(),
-        )
+def test_generate_daily_picks_request_requires_profile_ids():
+    from pydantic import ValidationError
 
-    assert "at least one profile" in str(error.value)
+    with pytest.raises(ValidationError):
+        GenerateDailyPicksRequest(user_id="default", profile_ids=[])
 
 
 def test_save_feedback_payload_updates_preferences():
@@ -419,6 +412,7 @@ def test_save_feedback_payload_updates_preferences():
     payload = save_feedback_payload(
         FeedbackRequest(
             user_id="default",
+            profile_id="profile-1",
             arxiv_id="2601.00001",
             label="like",
         ),
@@ -662,7 +656,7 @@ def test_dependencies_generate_daily_picks_maps_internal_failures_to_http_500(
 
     with pytest.raises(HTTPException) as error:
         dependencies.generate_daily_picks_payload(
-            GenerateDailyPicksRequest(user_id="default")
+            GenerateDailyPicksRequest(user_id="default", profile_ids=["profile-1"])
         )
 
     assert error.value.status_code == 500

@@ -71,7 +71,12 @@ def test_daily_picks_generate_route_returns_200_with_generation_status(monkeypat
     client = TestClient(routes.app)
     response = client.post(
         "/daily-picks/generate",
-        json={"user_id": "default", "max_results": 123, "embedding_limit": 456},
+        json={
+            "user_id": "default",
+            "profile_ids": ["profile-1"],
+            "max_results": 123,
+            "embedding_limit": 456,
+        },
     )
 
     assert response.status_code == 200
@@ -96,7 +101,12 @@ def test_daily_picks_generate_route_returns_500_for_internal_failure(monkeypatch
     client = TestClient(routes.app)
     response = client.post(
         "/daily-picks/generate",
-        json={"user_id": "default", "max_results": 123, "embedding_limit": 456},
+        json={
+            "user_id": "default",
+            "profile_ids": ["profile-1"],
+            "max_results": 123,
+            "embedding_limit": 456,
+        },
     )
 
     assert response.status_code == 500

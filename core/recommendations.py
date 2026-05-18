@@ -140,14 +140,14 @@ def generate_recommendations(
 if __name__ == "__main__":
     import sys
 
-    if len(sys.argv) < 2:
+    if len(sys.argv) < 3:
         raise SystemExit(
-            "Usage: python recommendations.py <run_id> [user_id] [profile_id]"
+            "Usage: python -m core.recommendations <run_id> <profile_id> [user_id]"
         )
 
     cli_run_id = sys.argv[1]
-    cli_user_id = sys.argv[2] if len(sys.argv) > 2 else DEFAULT_USER_ID
-    cli_profile_id = sys.argv[3] if len(sys.argv) > 3 else None
+    cli_profile_id = sys.argv[2]
+    cli_user_id = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_USER_ID
     generated = generate_recommendations(
         cli_run_id,
         user_id=cli_user_id,

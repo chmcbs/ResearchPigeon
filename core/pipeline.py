@@ -5,7 +5,6 @@ Runs the end-to-end recommendation pipeline
 from core.config import DEFAULT_USER_ID
 from core.embeddings import run_embeddings
 from core.ingestion import run_ingestion
-from core.profiles import get_or_create_default_profile
 from core.recommendations import generate_recommendations
 from core.schema import main as setup_database
 
@@ -32,8 +31,7 @@ def run_pipeline(
     elif profile_id is not None:
         target_profile_ids = [profile_id]
     else:
-        default_profile = get_or_create_default_profile(user_id=user_id)
-        target_profile_ids = [str(default_profile.profile_id)]
+        raise ValueError("provide either profile_id or profile_ids")
 
     print("1/4 Setting up database schema...")
     setup_database()

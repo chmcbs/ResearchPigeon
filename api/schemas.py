@@ -82,7 +82,7 @@ class DebugDailyPicksResponse(BaseModel):
 
 class GenerateDailyPicksRequest(BaseModel):
     user_id: str = DEFAULT_USER_ID
-    profile_id: str | None = None
+    profile_ids: list[str] = Field(min_length=1)
     max_results: int = Field(default=150, ge=1)
     embedding_limit: int = Field(default=600, ge=1)
 
@@ -116,7 +116,7 @@ class FeedbackRequest(BaseModel):
     arxiv_id: str
     label: Literal["like", "dislike"]
     user_id: str = DEFAULT_USER_ID
-    profile_id: str | None = None
+    profile_id: str
 
 
 class FeedbackResponse(BaseModel):
@@ -131,7 +131,7 @@ class FeedbackResponse(BaseModel):
 class RemoveFeedbackRequest(BaseModel):
     arxiv_id: str
     user_id: str = DEFAULT_USER_ID
-    profile_id: str | None = None
+    profile_id: str
 
 
 class RemoveFeedbackResponse(BaseModel):

@@ -99,7 +99,14 @@ async function generateDigest() {
   setStatus("Generating digest...", false);
   generateBtn.disabled = true;
   try {
-    await apiRequest("/daily-picks/generate", "POST", {});
+    const profilesPayload = await apiRequest("/profiles", "GET");
+    const profileIds = (profilesPayload.profiles || [])
+      .filter((p) => p.digest_enabled)
+      .map((p) => p.profile_id);
+    if (!profileIds.length) {
+      throw new Error("Turn on at least one profile for the digest in Preferences.");
+    }
+    await apiRequest("/daily-picks/generate", "POST", { profile_ids: profileIds });
     await loadDigest();
     setStatus("Digest generated and refreshed.", false);
   } finally {

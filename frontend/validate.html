@@ -61,14 +61,14 @@
       <h2>POST /daily-picks/generate</h2>
       <label for="generate-user-id">user_id</label>
       <input id="generate-user-id" value="default">
-      <label for="generate-profile-id">profile_id (optional)</label>
-      <input id="generate-profile-id" placeholder="profile-1">
+      <label for="generate-profile-ids">profile_ids (comma-separated)</label>
+      <input id="generate-profile-ids" placeholder="uuid-1, uuid-2">
       <label for="generate-max-results">max_results</label>
       <input id="generate-max-results" type="number" value="150" min="1">
       <label for="generate-embedding-limit">embedding_limit</label>
       <input id="generate-embedding-limit" type="number" value="600" min="1">
       <button id="generate-btn">Run Generate</button>
-      <pre id="generate-out">Trigger full generation pipeline.</pre>
+      <pre id="generate-out">Trigger pipeline for explicit profile_ids (one or more UUIDs).</pre>
     </section>
 
     <section class="validation-card">
@@ -85,8 +85,8 @@
       <h2>GET /daily-picks/debug</h2>
       <label for="debug-user-id">user_id</label>
       <input id="debug-user-id" value="default">
-      <label for="debug-profile-id">profile_id (optional)</label>
-      <input id="debug-profile-id" placeholder="profile-1">
+      <label for="debug-profile-id">profile_id</label>
+      <input id="debug-profile-id" placeholder="uuid from GET /profiles">
       <button id="debug-btn">Load Debug Picks</button>
       <pre id="debug-out">Load scoring/debug fields.</pre>
     </section>
@@ -95,8 +95,8 @@
       <h2>POST /feedback</h2>
       <label for="feedback-user-id">user_id</label>
       <input id="feedback-user-id" value="default">
-      <label for="feedback-profile-id">profile_id (optional)</label>
-      <input id="feedback-profile-id" placeholder="profile-1">
+      <label for="feedback-profile-id">profile_id</label>
+      <input id="feedback-profile-id" placeholder="uuid from GET /profiles">
       <label for="feedback-arxiv-id">arxiv_id</label>
       <input id="feedback-arxiv-id" placeholder="2601.00001">
       <label for="feedback-label">label</label>

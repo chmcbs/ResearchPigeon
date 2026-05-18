@@ -153,8 +153,8 @@ def daily_picks(
 @app.get("/daily-picks/debug", response_model=DebugDailyPicksResponse)
 def daily_picks_debug(
     request: Request,
+    profile_id: str,
     user_id: str = DEFAULT_USER_ID,
-    profile_id: str | None = None,
 ) -> dict:
     return get_debug_daily_picks_payload(
         user_id=_resolve_user_id(user_id, request),

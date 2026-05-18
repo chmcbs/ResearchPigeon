@@ -85,16 +85,11 @@ def test_run_pipeline_continues_when_recommendation_fails(monkeypatch):
     monkeypatch.setattr(pipeline, "run_embeddings", Mock(return_value=3))
     monkeypatch.setattr(
         pipeline,
-        "get_or_create_default_profile",
-        Mock(return_value=Mock(profile_id="profile-1")),
-    )
-    monkeypatch.setattr(
-        pipeline,
         "generate_recommendations",
         Mock(side_effect=[RuntimeError("boom"), [{"rank": 1}]]),
     )
 
-    summary = pipeline.run_pipeline(user_id="default")
+    summary = pipeline.run_pipeline(user_id="default", profile_id="profile-1")
 
     assert summary["recommendations_by_run"] == {
         "run-1": [],

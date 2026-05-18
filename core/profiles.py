@@ -280,52 +280,14 @@ def get_profile(profile_id: str, conn=None) -> ProfileRow | None:
     )
 
 
-def get_or_create_default_profile(
-    user_id: str = DEFAULT_USER_ID,
-    category: str | None = None,
-    interest_sentence: str = DEFAULT_INTEREST_TEXT,
-    profile_name: str | None = None,
-    conn=None,
-) -> ProfileRow:
-    if conn is None:
-        profiles = list_profiles(user_id=user_id)
-    else:
-        profiles = list_profiles(user_id=user_id, conn=conn)
-    if profiles:
-        return profiles[0]
-
-    if conn is None:
-        profile_id = create_profile(
-            user_id=user_id,
-            category=category,
-            interest_sentence=interest_sentence,
-            profile_name=profile_name,
-        )
-        profile = get_profile(profile_id)
-    else:
-        profile_id = create_profile(
-            user_id=user_id,
-            category=category,
-            interest_sentence=interest_sentence,
-            profile_name=profile_name,
-            conn=conn,
-        )
-        profile = get_profile(profile_id, conn=conn)
-    if profile is None:
-        raise ValueError("failed to create default profile")
-    return profile
-
-
 def resolve_profile_id(
     user_id: str = DEFAULT_USER_ID,
     profile_id: str | None = None,
     conn=None,
 ) -> str:
-    if profile_id:
-        return profile_id
-
-    profile = get_or_create_default_profile(user_id=user_id, conn=conn)
-    return str(profile.profile_id)
+    if not profile_id:
+        raise ValueError("profile_id is required")
+    return str(profile_id)
 
 
 def list_profile_keywords(

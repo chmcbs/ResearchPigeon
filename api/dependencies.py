@@ -65,7 +65,6 @@ from core.profiles import (
     add_profile_keyword,
     create_profile,
     delete_profile,
-    get_or_create_default_profile,
     list_digest_selected_profile_ids,
     list_profile_keywords,
     remove_profile_keyword,
@@ -116,10 +115,6 @@ def _resolve_profile(user_id: str, profile_id: str | None, conn=None) -> dict:
         profile_id=profile_id,
         fetch_profile_by_id=lambda profile_id, user_id: _fetch_profile_by_id(
             profile_id=profile_id,
-            user_id=user_id,
-            conn=conn,
-        ),
-        get_or_create_default_profile=lambda user_id: get_or_create_default_profile(
             user_id=user_id,
             conn=conn,
         ),
@@ -221,10 +216,6 @@ def generate_daily_picks_payload(
                 resolve_profile=lambda user_id, profile_id: _resolve_profile(
                     user_id=user_id,
                     profile_id=profile_id,
-                    conn=active_uow.conn,
-                ),
-                list_digest_selected_profile_ids=lambda user_id: list_digest_selected_profile_ids(
-                    user_id=user_id,
                     conn=active_uow.conn,
                 ),
                 run_pipeline=run_pipeline_with_uow,
