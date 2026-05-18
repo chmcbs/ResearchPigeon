@@ -182,6 +182,15 @@ def profiles_list(request: Request, user_id: str = DEFAULT_USER_ID) -> dict:
     return list_profiles_payload(user_id=_resolve_user_id(user_id, request))
 
 
+@app.put("/profiles/digest-selection", response_model=UpdateDigestSelectionResponse)
+def profiles_digest_selection_update(
+    request: UpdateDigestSelectionRequest,
+    http_request: Request,
+) -> dict:
+    request.user_id = _resolve_user_id(request.user_id, http_request)
+    return update_digest_selection_payload(request)
+
+
 @app.put("/profiles/{profile_id}", response_model=UpdateProfileResponse)
 def profiles_update(
     profile_id: str,
@@ -240,15 +249,6 @@ def profiles_keywords_remove(
 ) -> dict:
     request.user_id = _resolve_user_id(request.user_id, http_request)
     return remove_profile_keyword_payload(profile_id=profile_id, request=request)
-
-
-@app.put("/profiles/digest-selection", response_model=UpdateDigestSelectionResponse)
-def profiles_digest_selection_update(
-    request: UpdateDigestSelectionRequest,
-    http_request: Request,
-) -> dict:
-    request.user_id = _resolve_user_id(request.user_id, http_request)
-    return update_digest_selection_payload(request)
 
 
 ########################################

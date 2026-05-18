@@ -104,6 +104,41 @@ def test_daily_picks_generate_route_returns_500_for_internal_failure(monkeypatch
     assert "NO_SUCCESSFUL_GENERATION" in payload["detail"]
 
 
+def test_profiles_digest_selection_route_uses_static_handler(monkeypatch):
+    update_digest_selection_mock = Mock(
+        return_value={"user_id": "default", "selected_profile_ids": ["profile-1"]}
+    )
+    update_profile_mock = Mock(
+        return_value={
+            "profile": {
+                "profile_id": "profile-1",
+                "user_id": "default",
+                "profile_slot": 1,
+                "profile_name": "Profile 1",
+                "category": "cs.AI",
+                "interest_sentence": "Efficient LLM systems",
+                "digest_enabled": True,
+                "keywords": [],
+                "created_at": "2026-01-01T00:00:00",
+                "preference_updated_at": None,
+            }
+        }
+    )
+    monkeypatch.setattr(routes, "update_digest_selection_payload", update_digest_selection_mock)
+    monkeypatch.setattr(routes, "update_profile_payload", update_profile_mock)
+
+    client = TestClient(routes.app)
+    response = client.put(
+        "/profiles/digest-selection",
+        json={"user_id": "default", "profile_ids": ["profile-1"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["selected_profile_ids"] == ["profile-1"]
+    assert update_digest_selection_mock.call_count == 1
+    assert update_profile_mock.call_count == 0
+
+
 def test_validate_route_returns_internal_validation_ui():
     client = TestClient(routes.app)
     response = client.get("/validate")
