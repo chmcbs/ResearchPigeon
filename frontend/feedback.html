@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Feedback - arXiv Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css?v=6">
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">arXiv Assistant</a>
+    <div class="row">
+      <span id="session-label" class="muted">Checking session...</span>
+      <a class="link-btn" href="/preferences">Profiles</a>
+      <a class="link-btn" href="/digest">Digest</a>
+      <a class="link-btn" href="/feedback">Feedback</a>
+    </div>
+  </header>
+
+  <main class="container">
+    <section id="auth-gate" class="panel hidden">
+      <h1>Feedback</h1>
+      <p class="muted">Sign in by email to view papers from your digests and manage likes and dislikes.</p>
+      <form id="auth-form" class="stack">
+        <label for="auth-email">Email</label>
+        <input id="auth-email" type="email" placeholder="you@example.com" required>
+        <button type="submit">Send magic link</button>
+      </form>
+      <p id="auth-status" class="status muted"></p>
+      <p id="auth-link-wrap" class="hidden">
+        Dev magic link:
+        <a id="auth-link" href="#">open feedback</a>
+      </p>
+    </section>
+
+    <section id="feedback-app" class="hidden">
+      <h1>Feedback</h1>
+      <p class="muted feedback-hub-intro">Give feedback to improve recommendation quality</p>
+      <p id="feedback-status" class="status muted"></p>
+      <div class="feedback-hub-stack">
+        <div class="panel feedback-hub-column">
+          <h2>🆕 Feed</h2>
+          <div id="feed-list" class="feedback-hub-list"></div>
+        </div>
+        <div class="panel feedback-hub-column">
+          <h2>👍 Liked</h2>
+          <div id="liked-list" class="feedback-hub-list"></div>
+        </div>
+        <div class="panel feedback-hub-column">
+          <h2>👎 Disliked</h2>
+          <div id="disliked-list" class="feedback-hub-list"></div>
+        </div>
+      </div>
+      <p class="muted feedback-hub-footer">
+        <a class="link-btn" href="/digest">Back to digest preview</a>
+        <a class="link-btn" href="/preferences">Profiles</a>
+      </p>
+    </section>
+  </main>
+
+  <script src="/static/api-client.js"></script>
+  <script src="/static/feedback.js?v=7"></script>
+</body>
+</html>

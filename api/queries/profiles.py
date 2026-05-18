@@ -25,44 +25,7 @@ SELECT
             ORDER BY pk.created_at ASC, pk.keyword ASC
         ),
         ARRAY[]::text[]
-    ) AS keywords,
-    COALESCE(
-        ARRAY(
-            SELECT pf.arxiv_id
-            FROM paper_feedback pf
-            WHERE pf.profile_id = p.profile_id
-              AND pf.label = 'like'
-            ORDER BY pf.created_at DESC
-        ),
-        ARRAY[]::text[]
-    ) AS liked_arxiv_ids,
-    COALESCE(
-        ARRAY(
-            SELECT pf.arxiv_id
-            FROM paper_feedback pf
-            WHERE pf.profile_id = p.profile_id
-              AND pf.label = 'dislike'
-            ORDER BY pf.created_at DESC
-        ),
-        ARRAY[]::text[]
-    ) AS disliked_arxiv_ids,
-    COALESCE(
-        (
-            SELECT jsonb_agg(
-                jsonb_build_object(
-                    'arxiv_id', pf.arxiv_id,
-                    'title', COALESCE(pap.title, pf.arxiv_id),
-                    'label', pf.label,
-                    'created_at', pf.created_at
-                )
-                ORDER BY pf.created_at DESC, pf.arxiv_id ASC
-            )
-            FROM paper_feedback pf
-            LEFT JOIN papers pap ON pap.arxiv_id = pf.arxiv_id
-            WHERE pf.profile_id = p.profile_id
-        ),
-        '[]'::jsonb
-    ) AS feedback_items
+    ) AS keywords
 FROM user_profiles p
 LEFT JOIN profile_preferences pp ON pp.profile_id = p.profile_id
 WHERE p.user_id = %s
@@ -82,9 +45,6 @@ class ProfileSummaryRow:
     created_at: datetime
     preference_updated_at: datetime | None
     keywords: list[str]
-    liked_arxiv_ids: list[str]
-    disliked_arxiv_ids: list[str]
-    feedback_items: list[dict]
 
 
 def fetch_profiles_for_user(
@@ -115,9 +75,6 @@ def fetch_profiles_for_user(
             created_at=row[7],
             preference_updated_at=row[8],
             keywords=list(row[9] or []),
-            liked_arxiv_ids=list(row[10] or []),
-            disliked_arxiv_ids=list(row[11] or []),
-            feedback_items=list(row[12] or []),
         )
         for row in rows
     ]

@@ -23,6 +23,7 @@ from api.dependencies import (
     list_profiles_payload,
     remove_profile_keyword_payload,
     request_magic_link_payload,
+    get_feedback_hub_payload,
     remove_feedback_payload,
     save_feedback_payload,
     update_digest_selection_payload,
@@ -41,6 +42,7 @@ from api.schemas import (
     DeleteProfileResponse,
     FeedbackRequest,
     FeedbackResponse,
+    FeedbackHubResponse,
     RemoveFeedbackRequest,
     RemoveFeedbackResponse,
     GenerateDailyPicksRequest,
@@ -93,6 +95,11 @@ def preferences_page() -> FileResponse:
 @app.get("/digest", response_class=FileResponse)
 def digest_page() -> FileResponse:
     return FileResponse(frontend_dir / "digest.html")
+
+
+@app.get("/feedback", response_class=FileResponse)
+def feedback_page() -> FileResponse:
+    return FileResponse(frontend_dir / "feedback.html")
 
 
 @app.get("/validate", response_class=FileResponse)
@@ -177,13 +184,25 @@ def debug_reset_digest_data(request: Request) -> dict:
 ############### FEEDBACK ###############
 ########################################
 
-@app.post("/feedback", response_model=FeedbackResponse)
-def feedback(request: FeedbackRequest, http_request: Request) -> dict:
+@app.get("/api/feedback/hub", response_model=FeedbackHubResponse)
+def feedback_hub(
+    request: Request,
+    user_id: str = DEFAULT_USER_ID,
+    profile_id: str | None = None,
+) -> dict:
+    return get_feedback_hub_payload(
+        user_id=_resolve_user_id(user_id, request),
+        profile_id=profile_id,
+    )
+
+
+@app.post("/api/feedback", response_model=FeedbackResponse)
+def feedback_create(request: FeedbackRequest, http_request: Request) -> dict:
     request.user_id = _resolve_user_id(request.user_id, http_request)
     return save_feedback_payload(request)
 
 
-@app.delete("/feedback", response_model=RemoveFeedbackResponse)
+@app.delete("/api/feedback", response_model=RemoveFeedbackResponse)
 def feedback_delete(request: RemoveFeedbackRequest, http_request: Request) -> dict:
     request.user_id = _resolve_user_id(request.user_id, http_request)
     return remove_feedback_payload(request)
@@ -226,10 +245,12 @@ def profiles_update(
 @app.delete("/profiles/{profile_id}", response_model=DeleteProfileResponse)
 def profiles_delete(
     profile_id: str,
-    request: DeleteProfileRequest,
     http_request: Request,
+    user_id: str = DEFAULT_USER_ID,
 ) -> dict:
-    request.user_id = _resolve_user_id(request.user_id, http_request)
+    request = DeleteProfileRequest(
+        user_id=_resolve_user_id(user_id, http_request),
+    )
     return delete_profile_payload(profile_id=profile_id, request=request)
 
 

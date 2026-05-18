@@ -9,6 +9,42 @@ from starlette.testclient import TestClient
 import api.routes as routes
 
 
+def test_feedback_hub_route_returns_sections(monkeypatch):
+    generated_at = "2026-05-18T12:00:00+00:00"
+    monkeypatch.setattr(
+        routes,
+        "get_feedback_hub_payload",
+        Mock(
+            return_value={
+                "user_id": "default",
+                "seen": [
+                    {
+                        "arxiv_id": "2601.00001",
+                        "title": "Seen paper",
+                        "pdf_url": "https://arxiv.org/pdf/2601.00001",
+                        "profile_id": "profile-1",
+                        "profile_name": "Research",
+                        "category": "cs.AI",
+                        "generated_at": generated_at,
+                        "final_score": 0.91,
+                        "rank": 1,
+                    }
+                ],
+                "liked": [],
+                "disliked": [],
+            }
+        ),
+    )
+
+    client = TestClient(routes.app)
+    response = client.get("/api/feedback/hub", params={"user_id": "default"})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["seen"][0]["arxiv_id"] == "2601.00001"
+    assert body["liked"] == []
+
+
 def test_daily_picks_generate_route_returns_200_with_generation_status(monkeypatch):
     monkeypatch.setattr(
         routes,
@@ -149,6 +185,23 @@ def test_profiles_digest_selection_route_uses_static_handler(monkeypatch):
     assert update_profile_mock.call_count == 0
 
 
+def test_profiles_delete_works_without_request_body(monkeypatch):
+    delete_mock = Mock(
+        return_value={"profile_id": "profile-1", "deleted": True}
+    )
+    monkeypatch.setattr(routes, "delete_profile_payload", delete_mock)
+
+    client = TestClient(routes.app)
+    response = client.delete("/profiles/profile-1")
+
+    assert response.status_code == 200
+    assert response.json() == {"profile_id": "profile-1", "deleted": True}
+    delete_mock.assert_called_once()
+    _args, kwargs = delete_mock.call_args
+    assert kwargs["profile_id"] == "profile-1"
+    assert kwargs["request"].user_id == "default"
+
+
 def test_validate_route_returns_internal_validation_ui():
     client = TestClient(routes.app)
     response = client.get("/validate")
@@ -166,6 +219,7 @@ def test_landing_preferences_and_digest_pages_are_served():
     landing = client.get("/")
     prefs = client.get("/preferences")
     digest = client.get("/digest")
+    feedback = client.get("/feedback")
 
     assert landing.status_code == 200
     assert "<title>arXiv Assistant</title>" in landing.text
@@ -173,6 +227,8 @@ def test_landing_preferences_and_digest_pages_are_served():
     assert "<title>Preferences - arXiv Assistant</title>" in prefs.text
     assert digest.status_code == 200
     assert "<title>Daily Digest - arXiv Assistant</title>" in digest.text
+    assert feedback.status_code == 200
+    assert "<title>Feedback - arXiv Assistant</title>" in feedback.text
 
 
 def test_magic_link_request_route_returns_payload(monkeypatch):

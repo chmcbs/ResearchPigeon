@@ -2,6 +2,9 @@
 Reads papers without embeddings, generates vectors, and stores them in the paper_embeddings table
 """
 
+from __future__ import annotations
+
+import threading
 from dataclasses import dataclass
 
 import psycopg
@@ -18,6 +21,10 @@ class PaperForEmbedding:
 
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+
+_encoder_lock = threading.Lock()
+_sentence_transformer_model: SentenceTransformer | None = None
+
 
 FETCH_PAPERS_MISSING_EMBEDDINGS_SQL = """
 SELECT p.arxiv_id, p.title, p.abstract
@@ -67,8 +74,17 @@ def paper_text(paper: PaperForEmbedding) -> str:
     return f"{paper.title}\n\n{paper.abstract}"
 
 
+def _get_sentence_transformer() -> SentenceTransformer:
+    global _sentence_transformer_model
+    if _sentence_transformer_model is None:
+        with _encoder_lock:
+            if _sentence_transformer_model is None:
+                _sentence_transformer_model = SentenceTransformer(MODEL_NAME)
+    return _sentence_transformer_model
+
+
 def embed_texts(texts: list[str]) -> list[list[float]]:
-    model = SentenceTransformer(MODEL_NAME)
+    model = _get_sentence_transformer()
     embeddings = model.encode(texts, normalize_embeddings=True)
 
     return embeddings.tolist()

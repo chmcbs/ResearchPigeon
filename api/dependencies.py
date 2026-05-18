@@ -8,6 +8,7 @@ import psycopg
 from fastapi import HTTPException
 
 from api.queries.daily_picks import fetch_latest_picks, fetch_profile_by_id
+from api.queries.feedback_hub import fetch_user_paper_history
 from api.queries.metrics import fetch_metrics_rows
 from api.queries.profiles import fetch_profiles_for_user
 from api.schemas import (
@@ -34,6 +35,7 @@ from api.services.daily_picks import (
     remove_feedback_payload as remove_feedback_payload_service,
 )
 from api.services.errors import InternalServerError, NotFoundError
+from api.services.feedback_hub import get_feedback_hub_payload as get_feedback_hub_payload_service
 from api.services.metrics import get_metrics_payload as get_metrics_payload_service
 from api.services.profiles import (
     add_profile_keyword_payload as add_profile_keyword_payload_service,
@@ -299,6 +301,29 @@ def remove_feedback_payload(
                 update_preference_embedding=lambda **kwargs: update_preference_embedding(
                     conn=active_uow.conn,
                     **kwargs,
+                ),
+            )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+def get_feedback_hub_payload(
+    user_id: str = DEFAULT_USER_ID,
+    profile_id: str | None = None,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    try:
+        with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            return get_feedback_hub_payload_service(
+                user_id=user_id,
+                profile_id=profile_id,
+                fetch_user_paper_history=lambda uid, profile_id=None: fetch_user_paper_history(
+                    user_id=uid,
+                    connect=psycopg.connect,
+                    database_url=get_database_url(),
+                    conn=active_uow.conn,
+                    profile_id=profile_id,
                 ),
             )
     except ValueError as error:

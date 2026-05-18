@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Daily Digest - arXiv Assistant</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <link rel="stylesheet" href="/static/styles.css?v=7">
 </head>
 <body>
   <header class="topbar">
@@ -13,6 +13,7 @@
       <span id="session-label" class="muted">Checking session...</span>
       <a class="link-btn" href="/preferences">Profiles</a>
       <a class="link-btn" href="/digest">Digest</a>
+      <a class="link-btn" href="/feedback">Feedback</a>
     </div>
   </header>
 
@@ -47,14 +48,11 @@
           </button>
         </div>
       </div>
-      <p class="muted">
-        Simulation view for daily email content. Uses profile sections and raw scores.
-      </p>
       <p id="digest-status" class="status muted"></p>
-      <div id="digest-empty" class="panel hidden">
-        <p class="muted">No picks yet. Generate a digest to preview sections.</p>
-      </div>
       <div id="sections-wrap" class="stack"></div>
+      <div class="digest-feedback-cta">
+        <a class="digest-feedback-cta-btn" href="/feedback">Give feedback to improve recommendation quality &rarr;</a>
+      </div>
     </section>
   </main>
 
@@ -64,12 +62,11 @@
         <h2 class="digest-section-title"></h2>
         <span class="tiny muted digest-category"></span>
       </div>
-      <p class="tiny muted digest-interest"></p>
-      <ol class="digest-picks"></ol>
+      <ul class="digest-picks"></ul>
     </article>
   </template>
 
   <script src="/static/api-client.js"></script>
-  <script src="/static/digest.js?v=6"></script>
+  <script src="/static/digest.js?v=13"></script>
 </body>
 </html>

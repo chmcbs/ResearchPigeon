@@ -14,12 +14,12 @@ let categories = [];
 let profiles = [];
 
 function setStatus(message, isError) {
-  if (!isError) {
-    prefsStatus.textContent = "";
+  prefsStatus.textContent = message || "";
+  if (!message) {
+    prefsStatus.style.removeProperty("color");
     return;
   }
-  prefsStatus.textContent = message;
-  prefsStatus.style.color = "#b91c1c";
+  prefsStatus.style.color = isError ? "#b91c1c" : "#6b7280";
 }
 
 async function checkSession() {
@@ -70,6 +70,61 @@ function formatFeedbackDate(value) {
   });
 }
 
+function calendarDayKey(value) {
+  const parsed = new Date(value || 0);
+  if (Number.isNaN(parsed.getTime())) {
+    return 0;
+  }
+  return parsed.getFullYear() * 10000 + (parsed.getMonth() + 1) * 100 + parsed.getDate();
+}
+
+function sortPapersByDateAndScore(items) {
+  return [...items].sort((a, b) => {
+    const dayDiff = calendarDayKey(b.generated_at) - calendarDayKey(a.generated_at);
+    if (dayDiff !== 0) {
+      return dayDiff;
+    }
+    const scoreDiff = (Number(b.final_score) || 0) - (Number(a.final_score) || 0);
+    if (scoreDiff !== 0) {
+      return scoreDiff;
+    }
+    return (Number(a.rank) || 0) - (Number(b.rank) || 0);
+  });
+}
+
+function buildProfilePaperList(profile) {
+  const main = sortPapersByDateAndScore([
+    ...(profile.papers_liked || []).map((item) => ({
+      ...item,
+      is_liked: true,
+      is_disliked: false,
+    })),
+    ...(profile.papers_feed || []).map((item) => ({
+      ...item,
+      is_liked: false,
+      is_disliked: false,
+    })),
+  ]);
+  const disliked = sortPapersByDateAndScore(
+    (profile.papers_disliked || []).map((item) => ({
+      ...item,
+      is_liked: false,
+      is_disliked: true,
+    })),
+  );
+  return [...main, ...disliked];
+}
+
+async function loadProfilePapers(profile) {
+  const payload = await apiRequest(
+    `/api/feedback/hub?profile_id=${encodeURIComponent(profile.profile_id)}`,
+    "GET",
+  );
+  profile.papers_liked = payload.liked || [];
+  profile.papers_feed = payload.seen || [];
+  profile.papers_disliked = payload.disliked || [];
+}
+
 function normalizeKeyword(rawKeyword, currentKeywords) {
   const keyword = rawKeyword.trim().toLowerCase();
   if (!keyword) {
@@ -118,7 +173,6 @@ function renderProfiles() {
     const summaryBlock = node.querySelector(".profile-summary");
     const summaryCategory = node.querySelector(".summary-category");
     const summaryDescription = node.querySelector(".summary-description");
-    const summaryFeedback = node.querySelector(".summary-feedback");
     const feedbackToggle = node.querySelector(".feedback-toggle");
     const feedbackPanel = node.querySelector(".feedback-panel");
     const feedbackList = node.querySelector(".feedback-list");
@@ -130,7 +184,6 @@ function renderProfiles() {
     const editBtn = node.querySelector(".edit-btn");
 
     profile.keywords = Array.isArray(profile.keywords) ? profile.keywords : [];
-    profile.feedback_items = Array.isArray(profile.feedback_items) ? profile.feedback_items : [];
     profile.is_adding_keyword = Boolean(profile.is_adding_keyword);
     profile.feedback_expanded = Boolean(profile.feedback_expanded);
     profileTitleInput.value = profile.profile_name || "";
@@ -138,15 +191,7 @@ function renderProfiles() {
     interestText.value = profile.interest_sentence;
     setSummaryLine(summaryCategory, "Category", profile.category);
     setSummaryLine(summaryDescription, "Description", profile.interest_sentence);
-    function updateFeedbackSummary() {
-      const likedCount = (profile.liked_arxiv_ids || []).length;
-      const dislikedCount = (profile.disliked_arxiv_ids || []).length;
-      summaryFeedback.textContent = `\ud83d\udc4d ${likedCount}   \ud83d\udc4e ${dislikedCount}`;
-    }
-    updateFeedbackSummary();
-    feedbackToggle.textContent = profile.feedback_expanded
-      ? "Hide feedback"
-      : "View feedback";
+    feedbackToggle.textContent = profile.feedback_expanded ? "Hide papers" : "Show papers";
 
     const showDraftFields = isDraft && isEditing;
     categoryLabel.classList.toggle("hidden", !showDraftFields);
@@ -196,14 +241,14 @@ function renderProfiles() {
             if (isDraft) {
               profile.keywords = (profile.keywords || []).filter((item) => item !== value);
               drawKeywords(profile.keywords);
-              setStatus("Keyword removed.", false);
+              setStatus("", false);
               return;
             }
             try {
               const payload = await apiRequest(`/profiles/${profile.profile_id}/keywords`, "DELETE", { keyword: value });
               profile.keywords = Array.isArray(payload.keywords) ? payload.keywords : [];
               drawKeywords(profile.keywords);
-              setStatus("Keyword removed.", false);
+              setStatus("", false);
             } catch (error) {
               setStatus(String(error.message || error), true);
             }
@@ -258,7 +303,7 @@ function renderProfiles() {
           profile.keywords = [...(profile.keywords || []), normalized.keyword];
           profile.is_adding_keyword = false;
           drawKeywords(profile.keywords);
-          setStatus("Keyword added.", false);
+          setStatus("", false);
           return;
         }
         try {
@@ -268,7 +313,7 @@ function renderProfiles() {
           profile.keywords = Array.isArray(payload.keywords) ? payload.keywords : [];
           profile.is_adding_keyword = false;
           drawKeywords(profile.keywords);
-          setStatus("Keyword added.", false);
+          setStatus("", false);
         } catch (error) {
           setStatus(String(error.message || error), true);
         }
@@ -302,73 +347,71 @@ function renderProfiles() {
         return;
       }
 
-      if (!profile.feedback_items.length) {
+      const papers = buildProfilePaperList(profile);
+
+      if (!papers.length) {
         const emptyRow = document.createElement("p");
         emptyRow.className = "summary-line";
-        emptyRow.textContent = "No feedback yet.";
+        emptyRow.textContent = "No papers yet.";
         feedbackList.appendChild(emptyRow);
         return;
       }
 
-      const likedItems = profile.feedback_items.filter((item) => item.label === "like");
-      const dislikedItems = profile.feedback_items.filter((item) => item.label === "dislike");
-
-      function drawFeedbackGroup(label, symbol, items) {
-        if (!items.length) {
-          return;
-        }
-        const heading = document.createElement("p");
-        heading.className = "summary-line feedback-group-title";
-        heading.textContent = `${symbol} ${label}`;
-        feedbackList.appendChild(heading);
-
-        items.forEach((item) => {
+      papers.forEach((item) => {
           const row = document.createElement("div");
           row.className = "feedback-row";
 
           const leftSide = document.createElement("div");
           leftSide.className = "feedback-row-left";
 
+          if (item.is_liked) {
+            const thumb = document.createElement("span");
+            thumb.className = "feedback-paper-thumb";
+            thumb.textContent = "\ud83d\udc4d";
+            thumb.setAttribute("aria-label", "Liked");
+            leftSide.appendChild(thumb);
+          } else if (item.is_disliked) {
+            const thumb = document.createElement("span");
+            thumb.className = "feedback-paper-thumb";
+            thumb.textContent = "\ud83d\udc4e";
+            thumb.setAttribute("aria-label", "Disliked");
+            leftSide.appendChild(thumb);
+          } else {
+            const thumb = document.createElement("span");
+            thumb.className = "feedback-paper-thumb";
+            thumb.textContent = "\ud83c\udd95";
+            thumb.setAttribute("aria-label", "New in feed");
+            leftSide.appendChild(thumb);
+          }
+
           const text = document.createElement("a");
           text.textContent = item.title;
           text.className = "feedback-item-text";
-          text.href = `https://arxiv.org/pdf/${item.arxiv_id}`;
+          text.href = item.pdf_url || `https://arxiv.org/pdf/${item.arxiv_id}`;
           text.target = "_blank";
           text.rel = "noopener noreferrer";
 
           const rightSide = document.createElement("div");
           rightSide.className = "feedback-row-actions";
 
-          const dateLabel = document.createElement("span");
-          dateLabel.className = "feedback-date";
-          dateLabel.textContent = formatFeedbackDate(item.created_at);
+          const meta = document.createElement("span");
+          meta.className = "feedback-date";
+          meta.textContent = formatFeedbackDate(item.generated_at);
 
-          rightSide.appendChild(dateLabel);
-          if (isEditing) {
+          rightSide.appendChild(meta);
+          if ((item.is_liked || item.is_disliked) && isEditing) {
             const removeBtn = document.createElement("button");
             removeBtn.className = "chip-btn";
             removeBtn.type = "button";
             removeBtn.textContent = "x";
             removeBtn.addEventListener("click", async () => {
               try {
-                await apiRequest("/feedback", "DELETE", {
+                await apiRequest("/api/feedback", "DELETE", {
                   profile_id: profile.profile_id,
                   arxiv_id: item.arxiv_id,
                 });
-                profile.feedback_items = (profile.feedback_items || []).filter(
-                  (entry) => entry.arxiv_id !== item.arxiv_id
-                );
-                if (item.label === "like") {
-                  profile.liked_arxiv_ids = (profile.liked_arxiv_ids || []).filter(
-                    (id) => id !== item.arxiv_id
-                  );
-                } else {
-                  profile.disliked_arxiv_ids = (profile.disliked_arxiv_ids || []).filter(
-                    (id) => id !== item.arxiv_id
-                  );
-                }
-                updateFeedbackSummary();
-                setStatus("Feedback removed.", false);
+                await loadProfilePapers(profile);
+                setStatus("", false);
                 drawFeedbackItems();
               } catch (error) {
                 setStatus(String(error.message || error), true);
@@ -381,17 +424,23 @@ function renderProfiles() {
           row.appendChild(leftSide);
           row.appendChild(rightSide);
           feedbackList.appendChild(row);
-        });
-      }
-
-      drawFeedbackGroup("Likes", "\ud83d\udc4d", likedItems);
-      drawFeedbackGroup("Dislikes", "\ud83d\udc4e", dislikedItems);
+      });
     }
 
     drawKeywords(profile.keywords || []);
     drawFeedbackItems();
-    feedbackToggle.addEventListener("click", () => {
-      profile.feedback_expanded = !profile.feedback_expanded;
+    feedbackToggle.addEventListener("click", async () => {
+      const willExpand = !profile.feedback_expanded;
+      profile.feedback_expanded = willExpand;
+      if (willExpand && !isDraft) {
+        try {
+          setStatus("", false);
+          await loadProfilePapers(profile);
+        } catch (error) {
+          profile.feedback_expanded = false;
+          setStatus(String(error.message || error), true);
+        }
+      }
       renderProfiles();
     });
 
@@ -403,6 +452,11 @@ function renderProfiles() {
           interestText.focus();
           return;
         }
+        const prevSaveLabel = saveBtn.textContent;
+        saveBtn.disabled = true;
+        saveBtn.setAttribute("aria-busy", "true");
+        saveBtn.textContent = "Creating…";
+        setStatus("", false);
         try {
           const createPayload = await apiRequest("/profiles", "POST", {
             profile_name: profileTitleInput.value.trim() || `Profile ${profiles.length}`,
@@ -425,14 +479,37 @@ function renderProfiles() {
             digest_enabled: digestCheckbox.checked,
           });
           createdProfile = updatePayload.profile;
+          // Clear draft flag on the in-memory card before syncing digest selection; otherwise
+          // getSelectedProfileIds() skips drafts and digest-selection disables this profile.
+          const draftIdx = profiles.indexOf(profile);
+          if (draftIdx !== -1) {
+            Object.assign(profiles[draftIdx], {
+              profile_id: createdProfile.profile_id,
+              user_id: createdProfile.user_id,
+              profile_slot: createdProfile.profile_slot,
+              profile_name: createdProfile.profile_name,
+              category: createdProfile.category,
+              interest_sentence: createdProfile.interest_sentence,
+              digest_enabled: createdProfile.digest_enabled,
+              created_at: createdProfile.created_at,
+              is_draft: false,
+            });
+          }
           await updateDigestSelection();
           await loadProfiles();
-          setStatus("Profile created.", false);
+          setStatus("", false);
         } catch (error) {
           setStatus(String(error.message || error), true);
+          saveBtn.disabled = false;
+          saveBtn.removeAttribute("aria-busy");
+          saveBtn.textContent = prevSaveLabel;
         }
         return;
       }
+      const prevSaveLabel = saveBtn.textContent;
+      saveBtn.disabled = true;
+      saveBtn.setAttribute("aria-busy", "true");
+      saveBtn.textContent = "Saving…";
       try {
         const updatePayload = await apiRequest(`/profiles/${profile.profile_id}`, "PUT", {
           profile_name: profileTitleInput.value,
@@ -443,21 +520,24 @@ function renderProfiles() {
         profile.is_editing = false;
         await updateDigestSelection();
         renderProfiles();
-        setStatus("Profile saved.", false);
+        setStatus("", false);
       } catch (error) {
         setStatus(String(error.message || error), true);
+        saveBtn.disabled = false;
+        saveBtn.removeAttribute("aria-busy");
+        saveBtn.textContent = prevSaveLabel;
       }
     });
 
     editBtn.addEventListener("click", async () => {
       profile.is_editing = true;
       renderProfiles();
-      setStatus("Edit mode enabled.", false);
+      setStatus("", false);
     });
     cancelEditBtn.addEventListener("click", async () => {
       profile.is_editing = false;
       await loadProfiles();
-      setStatus("Edit cancelled.", false);
+      setStatus("", false);
     });
 
     digestCheckbox.addEventListener("change", async () => {
@@ -471,7 +551,7 @@ function renderProfiles() {
           digest_enabled: profile.digest_enabled,
         });
         await updateDigestSelection();
-        setStatus("Active state updated.", false);
+        setStatus("", false);
       } catch (error) {
         profile.digest_enabled = !digestCheckbox.checked;
         digestCheckbox.checked = profile.digest_enabled;
@@ -483,15 +563,15 @@ function renderProfiles() {
       if (isDraft) {
         profiles = profiles.filter((item) => item.profile_id !== profile.profile_id);
         renderProfiles();
-        setStatus("Profile creation cancelled.", false);
+        setStatus("", false);
         return;
       }
       try {
-        await apiRequest(`/profiles/${profile.profile_id}`, "DELETE", {});
+        await apiRequest(`/profiles/${profile.profile_id}`, "DELETE");
         profiles = profiles.filter((item) => item.profile_id !== profile.profile_id);
         await updateDigestSelection();
         renderProfiles();
-        setStatus("Profile deleted.", false);
+        setStatus("", false);
       } catch (error) {
         setStatus(String(error.message || error), true);
       }
@@ -538,7 +618,7 @@ addProfileBtn.addEventListener("click", async () => {
     is_draft: true,
   });
   renderProfiles();
-  setStatus("Fill in the new profile card and click Create profile.", false);
+  setStatus("", false);
 });
 
 debugResetProfilesBtn.addEventListener("click", async () => {

@@ -163,7 +163,7 @@ document.getElementById("feedback-btn").addEventListener("click", function () {
       user_id: document.getElementById("feedback-user-id").value.trim() || "default",
       profile_id: profileId,
     };
-    return apiRequest("/feedback", "POST", body);
+    return apiRequest("/api/feedback", "POST", body);
   });
 });
 

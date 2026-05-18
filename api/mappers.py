@@ -44,9 +44,6 @@ def to_profile_summary(row: ProfileSummaryRow) -> dict:
         "created_at": row.created_at,
         "preference_updated_at": getattr(row, "preference_updated_at", None),
         "keywords": list(getattr(row, "keywords", [])),
-        "liked_arxiv_ids": list(getattr(row, "liked_arxiv_ids", [])),
-        "disliked_arxiv_ids": list(getattr(row, "disliked_arxiv_ids", [])),
-        "feedback_items": list(getattr(row, "feedback_items", [])),
     }
 
 

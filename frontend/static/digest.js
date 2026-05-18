@@ -5,14 +5,17 @@ const authLinkWrap = document.getElementById("auth-link-wrap");
 const authLink = document.getElementById("auth-link");
 const sessionLabel = document.getElementById("session-label");
 const digestStatus = document.getElementById("digest-status");
-const emptyState = document.getElementById("digest-empty");
 const sectionsWrap = document.getElementById("sections-wrap");
 const generateBtn = document.getElementById("generate-btn");
 const debugResetDbBtn = document.getElementById("debug-reset-db-btn");
 const sectionTemplate = document.getElementById("section-template");
 
 function setStatus(message, isError) {
-  digestStatus.textContent = message;
+  digestStatus.textContent = message || "";
+  if (!message) {
+    digestStatus.style.removeProperty("color");
+    return;
+  }
   digestStatus.style.color = isError ? "#b91c1c" : "#6b7280";
 }
 
@@ -24,30 +27,55 @@ function sectionHeading(section) {
   return "Profile " + section.profile_slot;
 }
 
+function scoreDisplayPercent(finalScore) {
+  const raw = Number(finalScore);
+  const score = Number.isFinite(raw) ? raw : 0;
+  const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+  return pct;
+}
+
+/** 0–3 ★ from rounded percent: &lt;55 none, 55–64 → 1, 65–74 → 2, 75+ → 3 */
+function starRatingFromPercent(percent) {
+  if (percent >= 75) {
+    return 3;
+  }
+  if (percent >= 65) {
+    return 2;
+  }
+  if (percent >= 55) {
+    return 1;
+  }
+  return 0;
+}
+
+function starsDisplay(percent) {
+  return "⭐".repeat(starRatingFromPercent(percent));
+}
+
 function renderSections(sections) {
   sectionsWrap.innerHTML = "";
   if (!sections || !sections.length) {
-    emptyState.classList.remove("hidden");
     return;
   }
 
   const withPicks = sections.filter((section) => (section.picks || []).length > 0);
   if (!withPicks.length) {
-    emptyState.classList.remove("hidden");
     return;
   }
-  emptyState.classList.add("hidden");
 
   withPicks.forEach((section) => {
     const node = sectionTemplate.content.firstElementChild.cloneNode(true);
     node.querySelector(".digest-section-title").textContent = sectionHeading(section);
     node.querySelector(".digest-category").textContent = section.category || "";
-    node.querySelector(".digest-interest").textContent = section.interest_sentence || "";
     const picksList = node.querySelector(".digest-picks");
 
-    section.picks.forEach((pick) => {
+    section.picks.forEach((pick, index) => {
       const item = document.createElement("li");
       item.className = "digest-pick";
+
+      const indexSpan = document.createElement("span");
+      indexSpan.className = "digest-pick-index";
+      indexSpan.textContent = String(index + 1) + ".";
 
       const title = document.createElement("a");
       title.className = "digest-pick-title";
@@ -55,12 +83,23 @@ function renderSections(sections) {
       title.href = pick.pdf_url || ("https://arxiv.org/abs/" + pick.arxiv_id);
       title.target = "_blank";
       title.rel = "noreferrer";
+
+      item.appendChild(indexSpan);
       item.appendChild(title);
 
       const score = document.createElement("span");
       score.className = "digest-score";
-      const value = Number(pick.final_score);
-      score.textContent = "score: " + (Number.isFinite(value) ? value.toFixed(4) : pick.final_score);
+      const pct = scoreDisplayPercent(pick.final_score);
+      const starCount = starRatingFromPercent(pct);
+      score.textContent = starsDisplay(pct);
+      if (starCount === 0) {
+        score.setAttribute("aria-label", pct + "% match, no stars");
+      } else {
+        score.setAttribute(
+          "aria-label",
+          starCount + " out of 3 stars (" + pct + "% match)",
+        );
+      }
       item.appendChild(score);
 
       picksList.appendChild(item);
@@ -85,18 +124,30 @@ async function checkSession() {
 }
 
 async function loadDigest() {
-  setStatus("Loading latest digest...", false);
-  const payload = await apiRequest("/daily-picks", "GET");
-  renderSections(payload.sections || []);
-  if (payload.needs_generation) {
-    setStatus("No picks found yet. Generate a digest to preview content.", false);
-    return;
+  setStatus("", false);
+  try {
+    const payload = await apiRequest("/daily-picks", "GET");
+    renderSections(payload.sections || []);
+    setStatus("", false);
+  } catch (error) {
+    const msg = String(error.message || error);
+    if (
+      error.status === 400 &&
+      /at least one profile must be selected for digest generation/i.test(msg)
+    ) {
+      setStatus(
+        "No profiles are enabled for the digest. Open Preferences, turn on “Include in digest” for at least one profile, save, then try again.",
+        true,
+      );
+      renderSections([]);
+      return;
+    }
+    throw error;
   }
-  setStatus("Loaded latest digest sections.", false);
 }
 
 async function generateDigest() {
-  setStatus("Generating digest...", false);
+  setStatus("", false);
   generateBtn.disabled = true;
   try {
     const profilesPayload = await apiRequest("/profiles", "GET");
@@ -108,7 +159,7 @@ async function generateDigest() {
     }
     await apiRequest("/daily-picks/generate", "POST", { profile_ids: profileIds });
     await loadDigest();
-    setStatus("Digest generated and refreshed.", false);
+    setStatus("", false);
   } finally {
     generateBtn.disabled = false;
   }
