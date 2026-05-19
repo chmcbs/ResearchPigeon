@@ -57,7 +57,6 @@ from core.auth import (
     verify_magic_link,
 )
 from core.config import (
-    DEFAULT_USER_ID,
     get_app_base_url,
     get_arxiv_categories,
     get_daily_picks_generate_limit_per_user,
@@ -238,7 +237,7 @@ def _fetch_latest_picks(profile_id: str, run_ids: list[str] | None = None, conn=
 
 
 def get_daily_picks_payload(
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     run_ids: list[str] | None = None,
     uow: ApiUnitOfWork | None = None,
@@ -270,7 +269,7 @@ def get_daily_picks_payload(
 
 
 def get_debug_daily_picks_payload(
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     uow: ApiUnitOfWork | None = None,
     conn=None,
@@ -405,7 +404,7 @@ def remove_feedback_payload(
 
 
 def get_feedback_hub_payload(
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     uow: ApiUnitOfWork | None = None,
     conn=None,
@@ -516,7 +515,7 @@ def delete_profile_payload(
 
 
 def list_profiles_payload(
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     uow: ApiUnitOfWork | None = None,
     conn=None,
 ) -> dict:
@@ -610,7 +609,7 @@ def remove_profile_keyword_payload(
 
 def list_profile_keywords_payload(
     profile_id: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     uow: ApiUnitOfWork | None = None,
     conn=None,
 ) -> dict:

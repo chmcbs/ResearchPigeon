@@ -3,13 +3,12 @@ User profile model and helpers
 """
 
 import uuid
-from contextlib import contextmanager
 from dataclasses import dataclass
 
 import psycopg
 
 from core.config import DEFAULT_INTEREST_TEXT, DEFAULT_USER_ID, get_arxiv_categories
-from core.db import get_database_url
+from core.db import connection_scope
 from core.keyword_search import MAX_KEYWORDS_PER_PROFILE, normalize_keyword
 
 
@@ -140,16 +139,6 @@ WHERE user_id = %s
 """
 
 
-@contextmanager
-def _connection_scope(conn=None):
-    if conn is not None:
-        yield conn
-        return
-
-    with psycopg.connect(get_database_url()) as owned_conn:
-        yield owned_conn
-
-
 def _validate_interest_sentence(interest_sentence: str) -> str:
     value = interest_sentence.strip()
     if not value:
@@ -197,7 +186,7 @@ def create_profile(
     validated_category = _validate_category(category or get_arxiv_categories()[0])
     profile_id = str(uuid.uuid4())
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(LOCK_OCCUPIED_SLOTS_SQL, (user_id,))
             occupied_slots = {int(row[0]) for row in cur.fetchall()}
@@ -224,7 +213,7 @@ def create_profile(
 
 
 def get_profile(profile_id: str, conn=None) -> ProfileRow | None:
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(GET_PROFILE_SQL, (profile_id,))
             row = cur.fetchone()
@@ -252,7 +241,7 @@ def require_profile_id(
     if not profile_id:
         raise ValueError("profile_id is required")
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(CHECK_PROFILE_OWNERSHIP_SQL, (profile_id, user_id))
             if cur.fetchone() is None:
@@ -266,7 +255,7 @@ def list_profile_keywords(
     user_id: str = DEFAULT_USER_ID,
     conn=None,
 ) -> list[str]:
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(CHECK_PROFILE_OWNERSHIP_SQL, (profile_id, user_id))
             if cur.fetchone() is None:
@@ -286,7 +275,7 @@ def add_profile_keyword(
 ) -> list[str]:
     normalized_keyword = normalize_keyword(keyword)
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(CHECK_PROFILE_OWNERSHIP_SQL, (profile_id, user_id))
             if cur.fetchone() is None:
@@ -316,7 +305,7 @@ def remove_profile_keyword(
 ) -> list[str]:
     normalized_keyword = normalize_keyword(keyword)
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(CHECK_PROFILE_OWNERSHIP_SQL, (profile_id, user_id))
             if cur.fetchone() is None:
@@ -333,7 +322,7 @@ def remove_profile_keyword(
 def list_digest_selected_profile_ids(
     user_id: str = DEFAULT_USER_ID, conn=None
 ) -> list[str]:
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(LIST_DIGEST_SELECTED_SQL, (user_id,))
             rows = cur.fetchall()
@@ -348,12 +337,12 @@ def set_digest_profile_selection(
 ) -> list[str]:
     requested_profile_ids = list(dict.fromkeys(profile_ids))
     if not requested_profile_ids:
-        with _connection_scope(conn) as active_conn:
+        with connection_scope(conn) as active_conn:
             with active_conn.cursor() as cur:
                 cur.execute(DISABLE_ALL_DIGESTS_SQL, (user_id,))
         return []
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(MATCH_USER_PROFILES_SQL, (user_id, requested_profile_ids))
             matched_ids = {row[0] for row in cur.fetchall()}
@@ -395,7 +384,7 @@ def update_profile(
         else bool(existing_profile.digest_enabled)
     )
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(
                 UPDATE_PROFILE_SQL,
@@ -421,7 +410,7 @@ def delete_profile(
     user_id: str = DEFAULT_USER_ID,
     conn=None,
 ) -> bool:
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(DELETE_PROFILE_SQL, (profile_id, user_id))
             return cur.rowcount > 0

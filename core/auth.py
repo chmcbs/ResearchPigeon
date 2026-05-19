@@ -4,12 +4,9 @@ Passwordless authentication primitives for onboarding
 
 import hashlib
 import secrets
-from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 
-import psycopg
-
-from core.db import get_database_url
+from core.db import connection_scope
 
 MAGIC_LINK_TTL_MINUTES = 30
 SESSION_TTL_DAYS = 30
@@ -79,16 +76,6 @@ WHERE session_id = %s;
 """
 
 
-@contextmanager
-def _connection_scope(conn=None):
-    if conn is not None:
-        yield conn
-        return
-
-    with psycopg.connect(get_database_url()) as owned_conn:
-        yield owned_conn
-
-
 def _normalize_email(email: str) -> str:
     value = email.strip().lower()
     if len(value) > MAX_EMAIL_LENGTH:
@@ -116,7 +103,7 @@ def create_magic_link(email: str, conn=None) -> tuple[str, str]:
     token_hash = _token_hash(raw_token)
     expires_at = datetime.now(UTC) + timedelta(minutes=MAGIC_LINK_TTL_MINUTES)
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(DELETE_EXPIRED_TOKENS_SQL)
             cur.execute(DELETE_OUTSTANDING_MAGIC_TOKENS_SQL, (user_id,))
@@ -133,7 +120,7 @@ def verify_magic_link(token: str, conn=None) -> tuple[str, str, str]:
     session_id = secrets.token_urlsafe(32)
     expires_at = datetime.now(UTC) + timedelta(days=SESSION_TTL_DAYS)
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(CONSUME_MAGIC_TOKEN_SQL, (token_hash,))
             row = cur.fetchone()
@@ -152,7 +139,7 @@ def get_session_user(session_id: str, conn=None) -> tuple[str, str] | None:
     if not session_id:
         return None
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(GET_SESSION_SQL, (session_id,))
             row = cur.fetchone()
@@ -166,7 +153,7 @@ def revoke_session(session_id: str, conn=None) -> bool:
     if not session_id:
         return False
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(DELETE_SESSION_SQL, (session_id,))
             return cur.rowcount > 0

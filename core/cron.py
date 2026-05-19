@@ -2,11 +2,7 @@
 Scheduled digest generation for all subscribed users
 """
 
-from contextlib import contextmanager
-
-import psycopg
-
-from core.db import get_database_url
+from core.db import connection_scope
 from core.logging import configure_logging, get_logger
 from core.config import (
     get_embedding_limit,
@@ -25,18 +21,8 @@ ORDER BY user_id ASC;
 """
 
 
-@contextmanager
-def _connection_scope(conn=None):
-    if conn is not None:
-        yield conn
-        return
-
-    with psycopg.connect(get_database_url()) as owned_conn:
-        yield owned_conn
-
-
 def list_users_with_digest_selection(conn=None) -> list[str]:
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(LIST_DIGEST_USER_IDS_SQL)
             rows = cur.fetchall()

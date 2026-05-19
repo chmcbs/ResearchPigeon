@@ -3,13 +3,12 @@ Preference embedding and feedback handling
 """
 
 import uuid
-from contextlib import contextmanager
 from dataclasses import dataclass
 
 import psycopg
 
 from core.config import DEFAULT_USER_ID
-from core.db import get_database_url
+from core.db import connection_scope
 from core.embeddings import embed_texts
 from core.profiles import require_profile_id
 from core.vector_helper import vector_literal
@@ -80,16 +79,6 @@ WHERE profile_id = %s
 """
 
 
-@contextmanager
-def _connection_scope(conn=None):
-    if conn is not None:
-        yield conn
-        return
-
-    with psycopg.connect(get_database_url()) as owned_conn:
-        yield owned_conn
-
-
 # Convert pgvector strings to lists
 def coerce_vector(raw_vector) -> list[float]:
     if isinstance(raw_vector, str):
@@ -117,7 +106,7 @@ def initialize_preference_embedding(
     )
     preference_vector = vector_literal(embed_texts([interest_text])[0])
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(
                 UPSERT_PREFERENCE_EMBEDDING_SQL,
@@ -146,7 +135,7 @@ def save_feedback(
     )
     feedback_id = str(uuid.uuid4())
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(
                 UPSERT_FEEDBACK_SQL, (feedback_id, resolved_profile_id, arxiv_id, label)
@@ -166,7 +155,7 @@ def remove_feedback(
         user_id=user_id, profile_id=profile_id, conn=conn
     )
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(DELETE_FEEDBACK_SQL, (resolved_profile_id, arxiv_id))
             return cur.rowcount > 0
@@ -242,7 +231,7 @@ def update_preference_embedding(
         user_id=user_id, profile_id=profile_id, conn=conn
     )
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(FETCH_PREFERENCE_AND_FEEDBACK_SQL, (resolved_profile_id,))
             raw_rows = cur.fetchall()
@@ -293,7 +282,7 @@ def update_preference_embedding(
     preference_vector = normalize_vector(preference_vector)
     preference_vector_literal = vector_literal(preference_vector)
 
-    with _connection_scope(conn) as active_conn:
+    with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(
                 UPDATE_PREFERENCE_EMBEDDING_SQL,

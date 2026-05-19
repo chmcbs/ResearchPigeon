@@ -2,6 +2,7 @@
 HTTP route definitions for the API service
 """
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request, Response
@@ -80,23 +81,25 @@ from core.startup import validate_runtime_config
 ############### SETUP ##################
 ########################################
 
+@asynccontextmanager
+async def _app_lifespan(_app: FastAPI):
+    validate_runtime_config()
+    yield
+
+
 _docs_url = None if is_production() else "/docs"
 app = FastAPI(
-    title="arXiv Assistant API",
+    title="Research Digest API",
     docs_url=_docs_url,
     redoc_url=_docs_url,
     openapi_url=None if is_production() else "/openapi.json",
+    lifespan=_app_lifespan,
 )
 configure_logging()
 app.add_middleware(CsrfMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 frontend_dir = Path(__file__).resolve().parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(frontend_dir / "static")), name="static")
-
-
-@app.on_event("startup")
-def _validate_runtime_config_on_startup() -> None:
-    validate_runtime_config()
 
 
 def _set_session_cookie(response: Response, session_id: str) -> None:
@@ -107,6 +110,7 @@ def _set_session_cookie(response: Response, session_id: str) -> None:
         samesite="lax",
         secure=is_app_https(),
         max_age=60 * 60 * 24 * 30,
+        path="/",
     )
 
 
@@ -125,6 +129,7 @@ def _clear_auth_cookies(response: Response) -> None:
         httponly=True,
         samesite="lax",
         secure=is_app_https(),
+        path="/",
     )
     csrf_settings = csrf_cookie_settings()
     response.delete_cookie(
@@ -132,6 +137,7 @@ def _clear_auth_cookies(response: Response) -> None:
         httponly=csrf_settings["httponly"],
         samesite=csrf_settings["samesite"],
         secure=csrf_settings["secure"],
+        path="/",
     )
 
 

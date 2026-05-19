@@ -5,6 +5,7 @@ Tests scheduled digest cron helpers
 from unittest.mock import MagicMock, Mock
 
 from core import cron
+from core import db as db_module
 
 
 def test_list_users_with_digest_selection_returns_distinct_user_ids(monkeypatch):
@@ -14,7 +15,7 @@ def test_list_users_with_digest_selection_returns_distinct_user_ids(monkeypatch)
     connection.cursor.return_value.__enter__.return_value = cursor
     connect = MagicMock()
     connect.return_value.__enter__.return_value = connection
-    monkeypatch.setattr(cron.psycopg, "connect", connect)
+    monkeypatch.setattr(db_module.psycopg, "connect", connect)
 
     assert cron.list_users_with_digest_selection() == ["user-a", "user-b"]
 

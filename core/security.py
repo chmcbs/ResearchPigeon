@@ -63,6 +63,7 @@ def csrf_cookie_settings() -> dict:
         "samesite": "lax",
         "secure": is_app_https(),
         "max_age": 60 * 60 * 24 * 30,
+        "path": "/",
     }
 
 
