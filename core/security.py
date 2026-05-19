@@ -4,7 +4,13 @@ Shared security helpers for redirects, CSRF, and internal service authentication
 
 import secrets
 
-from core.config import get_debug_admin_emails, is_debug_features_enabled, is_app_https
+from core.config import (
+    get_debug_admin_emails,
+    get_internal_cron_token,
+    is_app_https,
+    is_csrf_disabled,
+    is_debug_features_enabled,
+)
 
 CSRF_COOKIE_NAME = "csrf_token"
 CSRF_HEADER_NAME = "x-csrf-token"
@@ -39,14 +45,7 @@ def resolve_safe_redirect_path(next_path: str, *, email: str | None = None) -> s
 
 
 def is_csrf_enforcement_enabled() -> bool:
-    import os
-
-    return os.getenv("DISABLE_CSRF", "").strip().lower() not in (
-        "1",
-        "true",
-        "yes",
-        "on",
-    )
+    return not is_csrf_disabled()
 
 
 def validate_csrf_token(cookie_token: str | None, header_token: str | None) -> bool:
@@ -65,13 +64,6 @@ def csrf_cookie_settings() -> dict:
         "secure": is_app_https(),
         "max_age": 60 * 60 * 24 * 30,
     }
-
-
-def get_internal_cron_token() -> str | None:
-    import os
-
-    token = os.getenv("INTERNAL_CRON_TOKEN", "").strip()
-    return token or None
 
 
 def is_debug_admin_email(email: str | None) -> bool:

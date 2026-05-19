@@ -65,3 +65,11 @@ def test_get_debug_admin_emails_empty_when_unset(monkeypatch):
     monkeypatch.delenv("DEBUG_ADMIN_EMAILS", raising=False)
 
     assert config.get_debug_admin_emails() == frozenset()
+
+
+def test_is_production_reads_app_env(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    assert config.is_production() is True
+
+    monkeypatch.setenv("APP_ENV", "development")
+    assert config.is_production() is False

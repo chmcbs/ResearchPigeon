@@ -52,12 +52,31 @@ def is_app_https() -> bool:
     return get_app_base_url().lower().startswith("https://")
 
 
+def is_production() -> bool:
+    return os.getenv("APP_ENV", "").strip().lower() in ("production", "prod")
+
+
 def _env_flag_enabled(name: str) -> bool:
     return os.getenv(name, "").strip().lower() in ("1", "true", "yes", "on")
 
 
+def is_csrf_disabled() -> bool:
+    return _env_flag_enabled("DISABLE_CSRF")
+
+
+def is_rate_limit_disabled() -> bool:
+    return _env_flag_enabled("DISABLE_RATE_LIMIT")
+
+
+
 def is_dev_magic_link_response_enabled() -> bool:
     return _env_flag_enabled("ALLOW_DEV_MAGIC_LINK_RESPONSE")
+
+
+def get_internal_cron_token() -> str | None:
+    token = os.getenv("INTERNAL_CRON_TOKEN", "").strip()
+    return token or None
+
 
 
 # Debugging
