@@ -20,13 +20,17 @@ services:
   api:
     build: .
     container_name: arxiv-assistant-api
+    env_file:
+      - .env
     ports:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/arxiv_assistant
-      INTERNAL_CRON_TOKEN: ${INTERNAL_CRON_TOKEN}
+      INTERNAL_CRON_TOKEN: ${INTERNAL_CRON_TOKEN:?INTERNAL_CRON_TOKEN is required}
       DEBUG_ADMIN_EMAILS: ${DEBUG_ADMIN_EMAILS:-}
       ALLOW_DEV_MAGIC_LINK_RESPONSE: ${ALLOW_DEV_MAGIC_LINK_RESPONSE:-1}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      ALLOW_DEBUG_FEATURES: ${ALLOW_DEBUG_FEATURES:-0}
     depends_on:
       db:
         condition: service_healthy
@@ -46,6 +50,8 @@ services:
   worker:
     build: .
     container_name: arxiv-assistant-worker
+    env_file:
+      - .env
     entrypoint: ["/worker-entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/arxiv_assistant
