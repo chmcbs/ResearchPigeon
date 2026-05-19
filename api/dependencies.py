@@ -58,7 +58,6 @@ from core.auth import (
 )
 from core.config import (
     get_app_base_url,
-    get_arxiv_categories,
     get_daily_picks_generate_limit_per_user,
     get_magic_link_request_limit_per_email,
     get_magic_link_request_limit_per_ip,
@@ -315,7 +314,6 @@ def generate_daily_picks_payload(
             return generate_daily_picks_payload_service(
                 request=request,
                 user_id=user_id,
-                get_arxiv_categories=get_arxiv_categories,
                 resolve_profile=lambda user_id, profile_id: _resolve_profile(
                     user_id=user_id,
                     profile_id=profile_id,

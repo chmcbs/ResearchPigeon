@@ -26,6 +26,23 @@ def test_get_arxiv_categories_rejects_empty(monkeypatch):
         config.get_arxiv_categories()
 
 
+def test_get_arxiv_category_options_include_labels(monkeypatch):
+    monkeypatch.setenv("ARXIV_CATEGORIES", "cs.AI, cs.CL")
+    config._get_arxiv_category_labels.cache_clear()
+
+    options = config.get_arxiv_category_options()
+
+    assert options == [
+        {"id": "cs.AI", "label": "cs.AI (Artificial Intelligence)"},
+        {"id": "cs.CL", "label": "cs.CL (Computation and Language)"},
+    ]
+
+
+def test_format_arxiv_category_label_falls_back_to_id(monkeypatch):
+    config._get_arxiv_category_labels.cache_clear()
+    assert config.format_arxiv_category_label("cs.ZZ") == "cs.ZZ"
+
+
 def test_get_daily_picks_k_uses_default():
     assert config.get_daily_picks_k() >= 1
 

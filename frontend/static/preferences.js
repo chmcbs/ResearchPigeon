@@ -192,9 +192,15 @@ function renderProfiles() {
 
     categories.forEach((category) => {
       const option = document.createElement("option");
-      option.value = category;
-      option.textContent = category;
-      if (category === profile.category) {
+      const categoryId =
+        typeof category === "string" ? category : category.id;
+      const categoryLabel =
+        typeof category === "string"
+          ? category
+          : category.label || category.id;
+      option.value = categoryId;
+      option.textContent = categoryLabel;
+      if (categoryId === profile.category) {
         option.selected = true;
       }
       categorySelect.appendChild(option);
@@ -575,7 +581,8 @@ addProfileBtn.addEventListener("click", async () => {
     profile_id: `draft-${Date.now()}`,
     profile_slot: profiles.length + 1,
     profile_name: `Profile ${profiles.length + 1}`,
-    category: categories[0] || "cs.AI",
+    category:
+      (categories[0] && (categories[0].id || categories[0])) || "cs.AI",
     interest_sentence: "",
     digest_enabled: true,
     keywords: [],

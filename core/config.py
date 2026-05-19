@@ -2,11 +2,18 @@
 Default application settings
 """
 
+import json
 import os
+from functools import lru_cache
+from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
+
+_CATEGORY_LABELS_PATH = (
+    Path(__file__).resolve().parent.parent / "data" / "arxiv_category_labels.json"
+)
 
 DEFAULT_USER_ID = os.getenv("DEFAULT_USER_ID", "default")
 DEFAULT_DAILY_K = int(os.getenv("DAILY_PICKS_K", "3"))
@@ -25,6 +32,31 @@ def get_arxiv_categories() -> list[str]:
         raise ValueError("At least one arXiv category must be configured")
 
     return categories
+
+
+@lru_cache(maxsize=1)
+def _get_arxiv_category_labels() -> dict[str, str]:
+    if not _CATEGORY_LABELS_PATH.is_file():
+        return {}
+    payload = json.loads(_CATEGORY_LABELS_PATH.read_text(encoding="utf-8"))
+    return {str(key): str(value) for key, value in payload.items()}
+
+
+def format_arxiv_category_label(category_id: str) -> str:
+    name = _get_arxiv_category_labels().get(category_id.strip())
+    if name:
+        return f"{category_id} ({name})"
+    return category_id
+
+
+def get_arxiv_category_options() -> list[dict[str, str]]:
+    return [
+        {
+            "id": category_id,
+            "label": format_arxiv_category_label(category_id),
+        }
+        for category_id in get_arxiv_categories()
+    ]
 
 
 def get_ingestion_max_results() -> int:

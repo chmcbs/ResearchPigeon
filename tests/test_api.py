@@ -253,7 +253,6 @@ def test_generate_daily_picks_runs_pipeline_and_returns_picks():
             embedding_limit=456,
         ),
         user_id="default",
-        get_arxiv_categories=Mock(return_value=["cs.AI"]),
         resolve_profile=Mock(
             side_effect=lambda user_id, profile_id: {"profile_id": profile_id}
         ),
@@ -308,7 +307,6 @@ def test_generate_daily_picks_allows_zero_recommendations_when_generation_succee
             embedding_limit=456,
         ),
         user_id="default",
-        get_arxiv_categories=Mock(return_value=["cs.AI"]),
         resolve_profile=Mock(return_value={"profile_id": "profile-1"}),
         run_pipeline=Mock(
             return_value={
@@ -360,7 +358,6 @@ def test_generate_daily_picks_fails_when_all_targets_fail():
         generate_daily_picks_payload(
             GenerateDailyPicksRequest(profile_ids=["profile-1"]),
             user_id="default",
-            get_arxiv_categories=Mock(return_value=["cs.AI"]),
             resolve_profile=Mock(return_value={"profile_id": "profile-1"}),
             run_pipeline=Mock(
                 return_value={
@@ -390,20 +387,6 @@ def test_generate_daily_picks_fails_when_all_targets_fail():
         )
 
     assert "NO_SUCCESSFUL_GENERATION" in str(error.value)
-
-
-def test_generate_daily_picks_rejects_multiple_categories():
-    with pytest.raises(BadRequestError) as error:
-        generate_daily_picks_payload(
-            GenerateDailyPicksRequest(profile_ids=["profile-1"]),
-            user_id="default",
-            get_arxiv_categories=Mock(return_value=["cs.AI", "cs.CL"]),
-            resolve_profile=Mock(),
-            run_pipeline=Mock(),
-            get_daily_picks_payload=Mock(),
-        )
-
-    assert "API MVP" in str(error.value)
 
 
 def test_generate_daily_picks_request_requires_profile_ids():

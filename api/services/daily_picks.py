@@ -8,12 +8,6 @@ from api.mappers import to_debug_pick, to_public_pick
 from api.services.errors import BadRequestError, InternalServerError
 
 
-def ensure_single_category_mvp(get_arxiv_categories: Callable[[], list[str]]) -> None:
-    categories = get_arxiv_categories()
-    if len(categories) != 1:
-        raise BadRequestError("API MVP supports exactly one configured arXiv category")
-
-
 def get_daily_picks_payload(
     user_id: str,
     profile_id: str | None,
@@ -93,13 +87,10 @@ def get_debug_daily_picks_payload(
 def generate_daily_picks_payload(
     request,
     user_id: str,
-    get_arxiv_categories: Callable[[], list[str]],
     resolve_profile: Callable[[str, str | None], dict],
     run_pipeline: Callable[..., dict],
     get_daily_picks_payload: Callable[[str, str | None], dict],
 ) -> dict:
-    ensure_single_category_mvp(get_arxiv_categories)
-
     target_profile_ids = list(dict.fromkeys(request.profile_ids))
     for target_profile_id in target_profile_ids:
         resolve_profile(user_id=user_id, profile_id=target_profile_id)
