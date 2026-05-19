@@ -1,0 +1,17 @@
+.git
+.github
+.pytest_cache
+.ruff_cache
+.cursor
+__pycache__
+**/__pycache__
+*.pyc
+.env
+.env.*
+plan.md
+tests
+sql
+README.md
+docker-compose.yml
+Dockerfile
+.dockerignore
