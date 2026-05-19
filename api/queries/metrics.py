@@ -1,5 +1,5 @@
 """
-SQL queries for API metrics endpoint.
+SQL queries for API metrics endpoint
 """
 
 from dataclasses import dataclass
@@ -63,75 +63,55 @@ class MetricsRowSet:
     recommendations_by_profile: dict[str, int]
 
 
+def _load_latest_run_rows(rows) -> list[LatestRunRow]:
+    return [
+        LatestRunRow(
+            run_id=row[0],
+            status=row[1],
+            category=row[2],
+            max_results=int(row[3]),
+            fetched_count=int(row[4] or 0),
+            saved_count=int(row[5] or 0),
+            started_at=row[6],
+            finished_at=row[7],
+            error_message=row[8],
+        )
+        for row in rows
+    ]
+
+
 def fetch_metrics_rows(
     latest_runs_limit: int,
     connect: Callable,
     database_url: str,
     conn=None,
 ) -> MetricsRowSet:
+    def _query(cur) -> MetricsRowSet:
+        cur.execute(RUN_STATUS_COUNTS_SQL)
+        run_status_counts = {status: int(count) for status, count in cur.fetchall()}
+
+        cur.execute(LATEST_RUNS_SQL, (latest_runs_limit,))
+        latest_runs = _load_latest_run_rows(cur.fetchall())
+
+        cur.execute(RECOMMENDATION_TOTAL_SQL)
+        total_recommendations = int(cur.fetchone()[0])
+
+        cur.execute(RECOMMENDATIONS_BY_PROFILE_SQL)
+        recommendations_by_profile = {
+            profile_id: int(count) for profile_id, count in cur.fetchall()
+        }
+
+        return MetricsRowSet(
+            run_status_counts=run_status_counts,
+            latest_runs=latest_runs,
+            total_recommendations=total_recommendations,
+            recommendations_by_profile=recommendations_by_profile,
+        )
+
     if conn is None:
-        with connect(database_url) as conn:
-            with conn.cursor() as cur:
-                cur.execute(RUN_STATUS_COUNTS_SQL)
-                run_status_counts = {
-                    status: int(count) for status, count in cur.fetchall()
-                }
+        with connect(database_url) as active_conn:
+            with active_conn.cursor() as cur:
+                return _query(cur)
 
-                cur.execute(LATEST_RUNS_SQL, (latest_runs_limit,))
-                latest_runs = [
-                    LatestRunRow(
-                        run_id=row[0],
-                        status=row[1],
-                        category=row[2],
-                        max_results=int(row[3]),
-                        fetched_count=int(row[4] or 0),
-                        saved_count=int(row[5] or 0),
-                        started_at=row[6],
-                        finished_at=row[7],
-                        error_message=row[8],
-                    )
-                    for row in cur.fetchall()
-                ]
-
-                cur.execute(RECOMMENDATION_TOTAL_SQL)
-                total_recommendations = int(cur.fetchone()[0])
-
-                cur.execute(RECOMMENDATIONS_BY_PROFILE_SQL)
-                recommendations_by_profile = {
-                    profile_id: int(count) for profile_id, count in cur.fetchall()
-                }
-    else:
-        with conn.cursor() as cur:
-            cur.execute(RUN_STATUS_COUNTS_SQL)
-            run_status_counts = {status: int(count) for status, count in cur.fetchall()}
-
-            cur.execute(LATEST_RUNS_SQL, (latest_runs_limit,))
-            latest_runs = [
-                LatestRunRow(
-                    run_id=row[0],
-                    status=row[1],
-                    category=row[2],
-                    max_results=int(row[3]),
-                    fetched_count=int(row[4] or 0),
-                    saved_count=int(row[5] or 0),
-                    started_at=row[6],
-                    finished_at=row[7],
-                    error_message=row[8],
-                )
-                for row in cur.fetchall()
-            ]
-
-            cur.execute(RECOMMENDATION_TOTAL_SQL)
-            total_recommendations = int(cur.fetchone()[0])
-
-            cur.execute(RECOMMENDATIONS_BY_PROFILE_SQL)
-            recommendations_by_profile = {
-                profile_id: int(count) for profile_id, count in cur.fetchall()
-            }
-
-    return MetricsRowSet(
-        run_status_counts=run_status_counts,
-        latest_runs=latest_runs,
-        total_recommendations=total_recommendations,
-        recommendations_by_profile=recommendations_by_profile,
-    )
+    with conn.cursor() as cur:
+        return _query(cur)

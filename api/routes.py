@@ -379,7 +379,7 @@ def profiles_keywords_remove(
 
 @app.get("/metrics")
 def metrics(request: Request, latest_runs_limit: int = 10) -> dict:
-    require_authenticated_user_id(request)
+    require_debug_admin(request)
     if latest_runs_limit < 1:
         raise HTTPException(status_code=400, detail="latest_runs_limit must be >= 1")
 

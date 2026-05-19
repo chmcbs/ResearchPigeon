@@ -33,7 +33,6 @@ def unauthenticated_client(monkeypatch):
         ("GET", "/daily-picks", None),
         ("GET", "/daily-picks/debug?profile_id=profile-1", None),
         ("GET", "/api/feedback/hub", None),
-        ("GET", "/metrics", None),
         ("POST", "/profiles", {"category": "cs.AI", "interest_sentence": "test"}),
         (
             "POST",
@@ -148,6 +147,27 @@ def test_validate_route_requires_admin_email(monkeypatch):
     assert response.status_code == 403
 
 
+def test_metrics_requires_admin_email(monkeypatch):
+    monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
+    monkeypatch.setenv("DEBUG_ADMIN_EMAILS", "admin@example.com")
+    monkeypatch.setattr(
+        "api.dependencies.get_auth_session_payload",
+        Mock(
+            return_value={
+                "authenticated": True,
+                "user_id": "other@example.com",
+                "email": "other@example.com",
+                "can_debug_access": False,
+            }
+        ),
+    )
+    client = TestClient(routes.app)
+
+    response = client.get("/metrics")
+
+    assert response.status_code == 403
+
+
 def test_daily_picks_debug_requires_admin_email(monkeypatch):
     monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
     monkeypatch.setenv("DEBUG_ADMIN_EMAILS", "admin@example.com")
@@ -216,7 +236,6 @@ def test_mutating_route_accepts_matching_csrf_token(monkeypatch):
     )
 
     assert response.status_code == 200
-
 
 
 def test_magic_link_request_omits_link_without_dev_flag(monkeypatch):
