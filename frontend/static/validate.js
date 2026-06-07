@@ -24,13 +24,13 @@ async function run(outId, action) {
 
 document.getElementById("profiles-btn").addEventListener("click", function () {
   run("profiles-out", async function () {
-    return apiRequest("/profiles", "GET");
+    return apiRequest("/api/profiles", "GET");
   });
 });
 
 document.getElementById("create-btn").addEventListener("click", function () {
   run("create-out", async function () {
-    return apiRequest("/profiles", "POST", {
+    return apiRequest("/api/profiles", "POST", {
       category: document.getElementById("create-category").value.trim() || "cs.AI",
       interest_sentence: document.getElementById("create-interest-sentence").value.trim() || "Efficient LLM systems"
     });
@@ -45,7 +45,7 @@ document.getElementById("digest-btn").addEventListener("click", function () {
       .split(",")
       .map(function (value) { return value.trim(); })
       .filter(function (value) { return value.length > 0; });
-    return apiRequest("/profiles/digest-selection", "PUT", {
+    return apiRequest("/api/profiles/digest-selection", "PUT", {
       profile_ids: profileIds
     });
   });
@@ -64,7 +64,7 @@ document.getElementById("keywords-list-btn").addEventListener("click", function 
   run("keywords-out", async function () {
     var inputs = getKeywordInputs();
     return apiRequest(
-      "/profiles/" + encodeURIComponent(inputs.profileId) + "/keywords",
+      "/api/profiles/" + encodeURIComponent(inputs.profileId) + "/keywords",
       "GET"
     );
   });
@@ -77,7 +77,7 @@ document.getElementById("keywords-add-btn").addEventListener("click", function (
       throw { status: 400, payload: { detail: "keyword is required for add" } };
     }
     return apiRequest(
-      "/profiles/" + encodeURIComponent(inputs.profileId) + "/keywords",
+      "/api/profiles/" + encodeURIComponent(inputs.profileId) + "/keywords",
       "POST",
       { keyword: inputs.keyword }
     );
@@ -91,7 +91,7 @@ document.getElementById("keywords-remove-btn").addEventListener("click", functio
       throw { status: 400, payload: { detail: "keyword is required for remove" } };
     }
     return apiRequest(
-      "/profiles/" + encodeURIComponent(inputs.profileId) + "/keywords",
+      "/api/profiles/" + encodeURIComponent(inputs.profileId) + "/keywords",
       "DELETE",
       { keyword: inputs.keyword }
     );

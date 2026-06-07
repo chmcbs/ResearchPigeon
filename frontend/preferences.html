@@ -3,23 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Preferences - arXiv Assistant</title>
-  <link rel="stylesheet" href="/static/styles.css">
+  <title>Profiles - arXiv Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css?v=12">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/">arXiv Assistant</a>
     <div class="row">
       <span id="session-label" class="muted">Checking session...</span>
-      <a class="link-btn" href="/preferences">Profiles</a>
+      <a class="link-btn" href="/profiles">Profiles</a>
       <a class="link-btn" href="/digest">Digest</a>
-      <a class="link-btn" href="/feedback">Feedback</a>
+      <a class="link-btn" href="/papers">Papers</a>
     </div>
   </header>
 
   <main class="container">
     <section id="auth-gate" class="panel hidden">
-      <h1>Preferences</h1>
+      <h1>Profiles</h1>
       <p class="muted">Sign in by email to edit your profiles.</p>
       <form id="auth-form" class="stack">
         <label for="auth-email">Email</label>
@@ -29,7 +29,7 @@
       <p id="auth-status" class="status muted"></p>
       <p id="auth-link-wrap" class="hidden">
         Dev magic link:
-        <a id="auth-link" href="#">open preferences</a>
+        <a id="auth-link" href="#">open profiles</a>
       </p>
     </section>
 
@@ -51,6 +51,7 @@
       </div>
       <p id="prefs-status" class="status muted"></p>
       <div id="profiles-grid" class="profiles-grid"></div>
+      <p class="profiles-order-tip muted">Tip: drag profiles to change their order in your daily digest!</p>
     </section>
   </main>
 
@@ -58,6 +59,13 @@
     <article class="profile-card">
       <div class="row between">
         <div class="row profile-header-meta">
+          <span
+            class="profile-drag-handle hidden"
+            role="button"
+            tabindex="0"
+            aria-label="Drag to reorder"
+            title="Drag to reorder"
+          >⋮⋮</span>
           <input class="profile-title-input" type="text" maxlength="60" aria-label="Profile name">
           <label class="checkbox-row active-toggle">
             <input class="digest-checkbox" type="checkbox">
@@ -98,6 +106,6 @@
   <script src="/static/api-client.js"></script>
   <script src="/static/auth-ui.js"></script>
   <script src="/static/format.js"></script>
-  <script src="/static/preferences.js?v=16"></script>
+  <script src="/static/preferences.js?v=20"></script>
 </body>
 </html>

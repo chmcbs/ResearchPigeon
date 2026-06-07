@@ -3,23 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Feedback - arXiv Assistant</title>
-  <link rel="stylesheet" href="/static/styles.css?v=6">
+  <title>Papers - arXiv Assistant</title>
+  <link rel="stylesheet" href="/static/styles.css?v=12">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/">arXiv Assistant</a>
     <div class="row">
       <span id="session-label" class="muted">Checking session...</span>
-      <a class="link-btn" href="/preferences">Profiles</a>
+      <a class="link-btn" href="/profiles">Profiles</a>
       <a class="link-btn" href="/digest">Digest</a>
-      <a class="link-btn" href="/feedback">Feedback</a>
+      <a class="link-btn" href="/papers">Papers</a>
     </div>
   </header>
 
   <main class="container">
     <section id="auth-gate" class="panel hidden">
-      <h1>Feedback</h1>
+      <h1>Papers</h1>
       <p class="muted">Sign in by email to view papers from your digests and manage likes and dislikes.</p>
       <form id="auth-form" class="stack">
         <label for="auth-email">Email</label>
@@ -29,31 +29,48 @@
       <p id="auth-status" class="status muted"></p>
       <p id="auth-link-wrap" class="hidden">
         Dev magic link:
-        <a id="auth-link" href="#">open feedback</a>
+        <a id="auth-link" href="#">open papers</a>
       </p>
     </section>
 
     <section id="feedback-app" class="hidden">
-      <h1>Feedback</h1>
-      <p class="muted feedback-hub-intro">Give feedback to improve recommendation quality</p>
+      <h1>Papers</h1>
+      <p class="muted feedback-hub-intro">Rate papers to improve recommendation quality</p>
+      <div class="feedback-hub-filters">
+        <div class="feedback-profile-filter">
+          <span class="feedback-profile-filter-label">Profiles</span>
+          <div id="profile-filter-chips" class="feedback-profile-filter-chips"></div>
+        </div>
+        <div class="feedback-profile-filter">
+          <span class="feedback-profile-filter-label">Date</span>
+          <div id="date-filter-chips" class="feedback-profile-filter-chips"></div>
+        </div>
+      </div>
       <p id="feedback-status" class="status muted"></p>
-      <div class="feedback-hub-stack">
-        <div class="panel feedback-hub-column">
-          <h2>🆕 Feed</h2>
-          <div id="feed-list" class="feedback-hub-list"></div>
-        </div>
-        <div class="panel feedback-hub-column">
-          <h2>👍 Liked</h2>
-          <div id="liked-list" class="feedback-hub-list"></div>
-        </div>
-        <div class="panel feedback-hub-column">
-          <h2>👎 Disliked</h2>
-          <div id="disliked-list" class="feedback-hub-list"></div>
+      <div class="feedback-hub-layout">
+        <nav class="feedback-hub-nav" aria-label="Paper sections">
+          <a class="feedback-hub-nav-link is-active" href="#feedback-feed">Feed</a>
+          <a class="feedback-hub-nav-link" href="#feedback-liked">Liked</a>
+          <a class="feedback-hub-nav-link" href="#feedback-disliked">Disliked</a>
+        </nav>
+        <div class="feedback-hub-stack">
+          <div id="feedback-feed" class="panel feedback-hub-column">
+            <h2>🆕 Feed</h2>
+            <div id="feed-list" class="feedback-hub-list"></div>
+          </div>
+          <div id="feedback-liked" class="panel feedback-hub-column">
+            <h2>👍 Liked</h2>
+            <div id="liked-list" class="feedback-hub-list"></div>
+          </div>
+          <div id="feedback-disliked" class="panel feedback-hub-column">
+            <h2>👎 Disliked</h2>
+            <div id="disliked-list" class="feedback-hub-list"></div>
+          </div>
         </div>
       </div>
       <p class="muted feedback-hub-footer">
         <a class="link-btn" href="/digest">Back to digest preview</a>
-        <a class="link-btn" href="/preferences">Profiles</a>
+        <a class="link-btn" href="/profiles">Profiles</a>
       </p>
     </section>
   </main>
@@ -61,6 +78,6 @@
   <script src="/static/api-client.js"></script>
   <script src="/static/auth-ui.js"></script>
   <script src="/static/format.js"></script>
-  <script src="/static/feedback.js?v=8"></script>
+  <script src="/static/feedback.js?v=14"></script>
 </body>
 </html>

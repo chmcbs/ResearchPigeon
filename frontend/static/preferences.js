@@ -91,7 +91,7 @@ function buildProfilePaperList(profile) {
 
 async function loadProfilePapers(profile) {
   const payload = await apiRequest(
-    `/api/feedback/hub?profile_id=${encodeURIComponent(profile.profile_id)}`,
+    `/api/papers/hub?profile_id=${encodeURIComponent(profile.profile_id)}`,
     "GET",
   );
   profile.papers_liked = payload.liked || [];
@@ -117,13 +117,153 @@ function normalizeKeyword(rawKeyword, currentKeywords) {
 }
 
 async function updateDigestSelection() {
-  await apiRequest("/profiles/digest-selection", "PUT", {
+  await apiRequest("/api/profiles/digest-selection", "PUT", {
     profile_ids: getSelectedProfileIds(),
   });
 }
 
+function orderedProfilesForDisplay() {
+  const saved = profiles
+    .filter((item) => !item.is_draft)
+    .sort((a, b) => (a.profile_slot || 0) - (b.profile_slot || 0));
+  const drafts = profiles.filter((item) => item.is_draft);
+  return [...saved, ...drafts];
+}
+
+function savedProfilesInSlotOrder() {
+  return profiles
+    .filter((item) => !item.is_draft)
+    .sort((a, b) => (a.profile_slot || 0) - (b.profile_slot || 0));
+}
+
+async function persistProfileOrder(newOrder) {
+  await apiRequest("/api/profiles/order", "PUT", {
+    profile_ids: newOrder,
+  });
+  const drafts = profiles.filter((item) => item.is_draft);
+  const byId = new Map(profiles.map((item) => [item.profile_id, item]));
+  const reordered = newOrder.map((profileId, index) => {
+    const profile = byId.get(profileId);
+    if (profile) {
+      profile.profile_slot = index + 1;
+    }
+    return profile;
+  }).filter(Boolean);
+  profiles = [...reordered, ...drafts];
+}
+
+function profileCardFromPoint(clientX, clientY, excludeProfileId) {
+  const cards = profilesGrid.querySelectorAll(".profile-card[data-profile-id]");
+  for (const card of cards) {
+    if (card.dataset.profileId === excludeProfileId) {
+      continue;
+    }
+    const rect = card.getBoundingClientRect();
+    if (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    ) {
+      return card;
+    }
+  }
+  return null;
+}
+
+function clearProfileDragOverState() {
+  profilesGrid.querySelectorAll(".profile-card").forEach((element) => {
+    element.classList.remove("is-drag-over");
+  });
+}
+
+async function reorderProfilesByIds(sourceId, targetId) {
+  if (!sourceId || !targetId || sourceId === targetId) {
+    return;
+  }
+
+  const savedProfiles = savedProfilesInSlotOrder();
+  const fromIndex = savedProfiles.findIndex((item) => item.profile_id === sourceId);
+  const toIndex = savedProfiles.findIndex((item) => item.profile_id === targetId);
+  if (fromIndex === -1 || toIndex === -1) {
+    return;
+  }
+
+  const reordered = [...savedProfiles];
+  const [moved] = reordered.splice(fromIndex, 1);
+  reordered.splice(toIndex, 0, moved);
+  const newOrder = reordered.map((item) => item.profile_id);
+
+  await persistProfileOrder(newOrder);
+  renderProfiles();
+  setStatus("", false);
+}
+
+function attachProfileDragBehavior(card, profile) {
+  const dragHandle = card.querySelector(".profile-drag-handle");
+  const canDrag = !profile.is_draft && !profile.is_editing;
+
+  dragHandle.classList.toggle("hidden", !canDrag);
+  if (!canDrag) {
+    return;
+  }
+
+  card.dataset.profileId = profile.profile_id;
+
+  dragHandle.addEventListener("pointerdown", (event) => {
+    if (event.button !== 0) {
+      return;
+    }
+    event.preventDefault();
+
+    const sourceId = profile.profile_id;
+    card.classList.add("is-dragging");
+    dragHandle.setPointerCapture(event.pointerId);
+
+    function finishDrag(upEvent) {
+      if (dragHandle.hasPointerCapture(upEvent.pointerId)) {
+        dragHandle.releasePointerCapture(upEvent.pointerId);
+      }
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+
+      card.classList.remove("is-dragging");
+      clearProfileDragOverState();
+
+      const targetCard = profileCardFromPoint(upEvent.clientX, upEvent.clientY, sourceId);
+      const targetId = targetCard?.dataset.profileId || null;
+
+      if (!targetId) {
+        return;
+      }
+
+      reorderProfilesByIds(sourceId, targetId).catch(async (error) => {
+        setStatus(String(error.message || error), true);
+        await loadProfiles();
+      });
+    }
+
+    function onPointerMove(moveEvent) {
+      clearProfileDragOverState();
+      const targetCard = profileCardFromPoint(moveEvent.clientX, moveEvent.clientY, sourceId);
+      if (targetCard) {
+        targetCard.classList.add("is-drag-over");
+      }
+    }
+
+    function onPointerUp(upEvent) {
+      finishDrag(upEvent);
+    }
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+  });
+}
+
 async function loadProfiles() {
-  const payload = await apiRequest("/profiles", "GET");
+  const payload = await apiRequest("/api/profiles", "GET");
   profiles = payload.profiles || [];
   renderProfiles();
 }
@@ -135,7 +275,7 @@ function renderProfiles() {
     return;
   }
 
-  profiles.forEach((profile) => {
+  orderedProfilesForDisplay().forEach((profile) => {
     const isDraft = Boolean(profile.is_draft);
     const isEditing = isDraft || Boolean(profile.is_editing);
     const node = cardTemplate.content.firstElementChild.cloneNode(true);
@@ -225,7 +365,7 @@ function renderProfiles() {
               return;
             }
             try {
-              const payload = await apiRequest(`/profiles/${profile.profile_id}/keywords`, "DELETE", { keyword: value });
+              const payload = await apiRequest(`/api/profiles/${profile.profile_id}/keywords`, "DELETE", { keyword: value });
               profile.keywords = Array.isArray(payload.keywords) ? payload.keywords : [];
               drawKeywords(profile.keywords);
               setStatus("", false);
@@ -287,7 +427,7 @@ function renderProfiles() {
           return;
         }
         try {
-          const payload = await apiRequest(`/profiles/${profile.profile_id}/keywords`, "POST", {
+          const payload = await apiRequest(`/api/profiles/${profile.profile_id}/keywords`, "POST", {
             keyword: normalized.keyword,
           });
           profile.keywords = Array.isArray(payload.keywords) ? payload.keywords : [];
@@ -438,7 +578,7 @@ function renderProfiles() {
         saveBtn.textContent = "Creating…";
         setStatus("", false);
         try {
-          const createPayload = await apiRequest("/profiles", "POST", {
+          const createPayload = await apiRequest("/api/profiles", "POST", {
             profile_name: profileTitleInput.value.trim() || `Profile ${profiles.length}`,
             category: categorySelect.value,
             interest_sentence: interestSentence,
@@ -447,13 +587,13 @@ function renderProfiles() {
           const draftKeywords = [...(profile.keywords || [])];
           for (const keyword of draftKeywords) {
             const keywordPayload = await apiRequest(
-              `/profiles/${createdProfile.profile_id}/keywords`,
+              `/api/profiles/${createdProfile.profile_id}/keywords`,
               "POST",
               { keyword }
             );
             createdProfile.keywords = keywordPayload.keywords;
           }
-          const updatePayload = await apiRequest(`/profiles/${createdProfile.profile_id}`, "PUT", {
+          const updatePayload = await apiRequest(`/api/profiles/${createdProfile.profile_id}`, "PUT", {
             profile_name: profileTitleInput.value,
             category: categorySelect.value,
             digest_enabled: digestCheckbox.checked,
@@ -491,7 +631,7 @@ function renderProfiles() {
       saveBtn.setAttribute("aria-busy", "true");
       saveBtn.textContent = "Saving…";
       try {
-        const updatePayload = await apiRequest(`/profiles/${profile.profile_id}`, "PUT", {
+        const updatePayload = await apiRequest(`/api/profiles/${profile.profile_id}`, "PUT", {
           profile_name: profileTitleInput.value,
           digest_enabled: digestCheckbox.checked,
         });
@@ -526,7 +666,7 @@ function renderProfiles() {
         return;
       }
       try {
-        await apiRequest(`/profiles/${profile.profile_id}`, "PUT", {
+        await apiRequest(`/api/profiles/${profile.profile_id}`, "PUT", {
           profile_name: profile.profile_name,
           digest_enabled: profile.digest_enabled,
         });
@@ -547,7 +687,7 @@ function renderProfiles() {
         return;
       }
       try {
-        await apiRequest(`/profiles/${profile.profile_id}`, "DELETE");
+        await apiRequest(`/api/profiles/${profile.profile_id}`, "DELETE");
         profiles = profiles.filter((item) => item.profile_id !== profile.profile_id);
         await updateDigestSelection();
         renderProfiles();
@@ -557,6 +697,7 @@ function renderProfiles() {
       }
     });
 
+    attachProfileDragBehavior(node, profile);
     profilesGrid.appendChild(node);
   });
 }
@@ -566,6 +707,7 @@ bindMagicLinkForm({
   statusEl: authStatus,
   linkWrapEl: authLinkWrap,
   linkEl: authLink,
+  nextPath: "/profiles",
 });
 
 addProfileBtn.addEventListener("click", async () => {

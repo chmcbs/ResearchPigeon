@@ -4,16 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Daily Digest - arXiv Assistant</title>
-  <link rel="stylesheet" href="/static/styles.css?v=7">
+  <link rel="stylesheet" href="/static/styles.css?v=9">
 </head>
 <body>
   <header class="topbar">
     <a class="brand" href="/">arXiv Assistant</a>
     <div class="row">
       <span id="session-label" class="muted">Checking session...</span>
-      <a class="link-btn" href="/preferences">Profiles</a>
+      <a class="link-btn" href="/profiles">Profiles</a>
       <a class="link-btn" href="/digest">Digest</a>
-      <a class="link-btn" href="/feedback">Feedback</a>
+      <a class="link-btn" href="/papers">Papers</a>
     </div>
   </header>
 
@@ -50,15 +50,22 @@
         </div>
       </div>
       <p id="digest-status" class="status muted"></p>
-      <div id="sections-wrap" class="stack"></div>
-      <div class="digest-feedback-cta">
-        <a class="digest-feedback-cta-btn" href="/feedback">Give feedback to improve recommendation quality &rarr;</a>
+      <h2 class="digest-preview-header">Your daily research digest from arXiv Assistant</h2>
+      <div class="panel digest-preview-card">
+        <div id="sections-wrap" class="digest-sections"></div>
+        <div class="digest-feedback-cta">
+          <a class="digest-feedback-cta-btn" href="/papers">Rate papers</a>
+          <a class="digest-feedback-cta-btn" href="/profiles">Manage profiles</a>
+        </div>
       </div>
+      <p class="digest-preview-disclaimer muted tiny">
+        Not affiliated with arXiv. Papers are sourced from arXiv.org.
+      </p>
     </section>
   </main>
 
   <template id="section-template">
-    <article class="panel digest-section">
+    <article class="digest-section">
       <div class="row between">
         <h2 class="digest-section-title"></h2>
         <span class="tiny muted digest-category"></span>

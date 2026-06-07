@@ -61,16 +61,31 @@ async function apiRequest(url, method, body) {
     }
     throw new Error(message);
   }
-  var payload = await response.json().catch(function () {
-    return { detail: "No JSON response body" };
-  });
+  var rawText = await response.text();
+  var payload = null;
+  if (rawText) {
+    try {
+      payload = JSON.parse(rawText);
+    } catch (err) {
+      payload = null;
+    }
+  }
 
   if (!response.ok) {
-    var detailText = formatApiDetail(payload.detail);
-    var error = new Error(detailText || "Request failed");
+    var detailText = "";
+    if (payload && payload.detail != null) {
+      detailText = formatApiDetail(payload.detail);
+    } else {
+      detailText = rawText.trim();
+    }
+    var error = new Error(detailText || ("Request failed (" + response.status + ")"));
     error.status = response.status;
     error.payload = payload;
     throw error;
+  }
+
+  if (!payload) {
+    throw new Error(rawText.trim() || "No JSON response body");
   }
 
   return payload;

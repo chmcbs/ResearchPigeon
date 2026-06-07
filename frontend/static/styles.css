@@ -64,6 +64,38 @@ body {
   gap: 12px;
 }
 
+.profile-drag-handle {
+  flex-shrink: 0;
+  cursor: grab;
+  border: 0;
+  background: transparent;
+  color: #9ca3af;
+  padding: 4px 6px;
+  font-size: 16px;
+  line-height: 1;
+  touch-action: none;
+  user-select: none;
+}
+
+.profile-drag-handle:active {
+  cursor: grabbing;
+}
+
+.profile-card.is-dragging {
+  opacity: 0.55;
+}
+
+.profile-card.is-drag-over {
+  outline: 2px dashed #2563eb;
+  outline-offset: 2px;
+}
+
+.profiles-order-tip {
+  margin-top: 12px;
+  font-size: 14px;
+  text-align: center;
+}
+
 .profile-title-input {
   font-size: 1.2rem;
   font-weight: 700;
@@ -198,9 +230,17 @@ button {
   flex: 0 0 auto;
 }
 
-.feedback-item-text {
+.feedback-item-text,
+.feedback-item-text:link,
+.feedback-item-text:visited {
   font-size: 13px;
   color: #374151;
+  text-decoration: none;
+}
+
+.feedback-item-text:hover {
+  color: #111827;
+  text-decoration: none;
 }
 
 .feedback-row-actions {
@@ -324,6 +364,36 @@ button {
   font-size: 12px;
 }
 
+.digest-preview-header {
+  margin: 0 0 16px;
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1.3;
+  color: #111827;
+  text-align: center;
+}
+
+.digest-preview-card {
+  padding: 24px;
+}
+
+.digest-sections {
+  display: flex;
+  flex-direction: column;
+}
+
+.digest-section + .digest-section {
+  margin-top: 24px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.digest-preview-disclaimer {
+  margin: 16px 0 0;
+  text-align: center;
+  line-height: 1.5;
+}
+
 .digest-section-title {
   margin: 0;
 }
@@ -396,6 +466,10 @@ button {
   margin-top: 28px;
   padding-top: 20px;
   border-top: 1px solid #e5e7eb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: center;
 }
 
 .digest-feedback-cta-btn {
@@ -418,11 +492,101 @@ button {
   max-width: 44rem;
 }
 
+.feedback-hub-filters {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 12px 0 16px;
+}
+
+.feedback-profile-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.feedback-profile-filter-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #374151;
+}
+
+.feedback-profile-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.feedback-profile-filter-chip {
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  background: #fff;
+  color: #374151;
+  padding: 6px 12px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.feedback-profile-filter-chip:hover {
+  border-color: #9ca3af;
+}
+
+.feedback-profile-filter-chip.is-selected {
+  background: #111827;
+  border-color: #111827;
+  color: #fff;
+}
+
+.feedback-hub-layout {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+  margin-top: 16px;
+}
+
+.feedback-hub-nav {
+  position: sticky;
+  top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+}
+
+.feedback-hub-nav-link {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 6px;
+  color: #374151;
+  text-decoration: none;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.feedback-hub-nav-link:hover {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.feedback-hub-nav-link.is-active {
+  background: #111827;
+  color: #fff;
+}
+
+.feedback-hub-column {
+  scroll-margin-top: 16px;
+}
+
 .feedback-hub-stack {
   display: flex;
   flex-direction: column;
   gap: 16px;
-  margin-top: 16px;
+  min-width: 0;
 }
 
 .feedback-hub-column h2 {
@@ -456,6 +620,39 @@ button {
   align-items: center;
   justify-content: space-between;
   gap: 8px 12px;
+}
+
+.feedback-hub-entry-actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+}
+
+.feedback-delete-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 36px;
+  height: 32px;
+  padding: 0 8px;
+  border: 1px solid #fecaca;
+  background: #fff;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.feedback-delete-btn:hover {
+  background: #fef2f2;
+  border-color: #fca5a5;
+}
+
+.feedback-delete-btn:disabled {
+  opacity: 0.55;
+  cursor: wait;
 }
 
 .feedback-vote-btns {
@@ -518,4 +715,27 @@ button {
   flex-wrap: wrap;
   gap: 8px;
   align-items: center;
+}
+
+@media (max-width: 720px) {
+  .feedback-hub-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .feedback-hub-nav {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+
+  .feedback-hub-nav-link {
+    flex: 1 1 auto;
+    text-align: center;
+  }
+
+  .feedback-hub-column {
+    scroll-margin-top: 72px;
+  }
 }

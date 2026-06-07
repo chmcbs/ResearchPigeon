@@ -8,9 +8,68 @@ const feedbackStatus = document.getElementById("feedback-status");
 const feedList = document.getElementById("feed-list");
 const likedList = document.getElementById("liked-list");
 const dislikedList = document.getElementById("disliked-list");
+const profileFilterChips = document.getElementById("profile-filter-chips");
+const dateFilterChips = document.getElementById("date-filter-chips");
+const feedbackNavLinks = Array.from(document.querySelectorAll(".feedback-hub-nav-link"));
+const feedbackSectionIds = ["feedback-feed", "feedback-liked", "feedback-disliked"];
+
+const DATE_FILTER_OPTIONS = [
+  { id: "all", label: "All time" },
+  { id: "7", label: "Last 7 days" },
+  { id: "30", label: "Last 30 days" },
+];
+
+let hubPayload = null;
+let profiles = [];
+const selectedProfileIds = new Set();
+let selectedDateFilter = "all";
 
 function setStatus(message, isError) {
   setPageStatus(feedbackStatus, message, isError);
+}
+
+function profileLabel(profile) {
+  const name = (profile.profile_name || "").trim();
+  if (name) {
+    return name;
+  }
+  return "Profile " + profile.profile_slot;
+}
+
+function itemMatchesDateFilter(item) {
+  if (selectedDateFilter === "all") {
+    return true;
+  }
+  if (!item.generated_at) {
+    return false;
+  }
+  const generated = new Date(item.generated_at);
+  if (Number.isNaN(generated.getTime())) {
+    return false;
+  }
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - Number(selectedDateFilter));
+  cutoff.setHours(0, 0, 0, 0);
+  return generated >= cutoff;
+}
+
+function filterItems(items) {
+  if (selectedProfileIds.size === 0) {
+    return [];
+  }
+  return items.filter(
+    (item) => selectedProfileIds.has(item.profile_id) && itemMatchesDateFilter(item),
+  );
+}
+
+function emptyMessageForSection(defaultText) {
+  if (selectedProfileIds.size === 0) {
+    return "Select at least one profile.";
+  }
+  if (selectedDateFilter !== "all") {
+    return "No papers match the current filters.";
+  }
+  return defaultText;
 }
 
 async function submitFeedback(item, label) {
@@ -20,7 +79,7 @@ async function submitFeedback(item, label) {
     arxiv_id: item.arxiv_id,
     label: label,
   });
-  await loadFeedbackHub();
+  await loadFeedbackHub({ preserveFilters: true });
 }
 
 async function removeFeedback(item) {
@@ -29,7 +88,44 @@ async function removeFeedback(item) {
     profile_id: item.profile_id,
     arxiv_id: item.arxiv_id,
   });
-  await loadFeedbackHub();
+  await loadFeedbackHub({ preserveFilters: true });
+}
+
+async function deletePaper(item) {
+  const ok = window.confirm(
+    "Permanently remove this paper from your history? It will not appear in future digests for this profile.",
+  );
+  if (!ok) {
+    return;
+  }
+  setStatus("", false);
+  await apiRequest("/api/papers", "DELETE", {
+    profile_id: item.profile_id,
+    arxiv_id: item.arxiv_id,
+  });
+  await loadFeedbackHub({ preserveFilters: true });
+}
+
+function createDeleteButton(item) {
+  const deleteBtn = document.createElement("button");
+  deleteBtn.type = "button";
+  deleteBtn.className = "feedback-delete-btn";
+  deleteBtn.textContent = "\ud83d\uddd1\ufe0f";
+  deleteBtn.setAttribute("aria-label", "Permanently delete paper");
+  deleteBtn.setAttribute("title", "Permanently delete paper");
+  deleteBtn.addEventListener("click", async () => {
+    if (deleteBtn.disabled) {
+      return;
+    }
+    deleteBtn.disabled = true;
+    try {
+      await deletePaper(item);
+    } catch (error) {
+      setStatus(String(error.message || error), true);
+      deleteBtn.disabled = false;
+    }
+  });
+  return deleteBtn;
 }
 
 function createVoteButtons(item, section) {
@@ -90,7 +186,7 @@ function renderList(container, items, emptyText, section) {
   if (!items.length) {
     const p = document.createElement("p");
     p.className = "muted feedback-hub-empty";
-    p.textContent = emptyText;
+    p.textContent = emptyMessageForSection(emptyText);
     container.appendChild(p);
     return;
   }
@@ -124,7 +220,11 @@ function renderList(container, items, emptyText, section) {
       "% match";
 
     footer.appendChild(meta);
-    footer.appendChild(createVoteButtons(item, section));
+    const actions = document.createElement("div");
+    actions.className = "feedback-hub-entry-actions";
+    actions.appendChild(createVoteButtons(item, section));
+    actions.appendChild(createDeleteButton(item));
+    footer.appendChild(actions);
 
     main.appendChild(title);
     main.appendChild(footer);
@@ -133,16 +233,110 @@ function renderList(container, items, emptyText, section) {
   });
 }
 
-function refreshHub(payload) {
-  renderList(feedList, payload.seen || [], "Nothing in your feed yet.", "feed");
-  renderList(likedList, payload.liked || [], "No likes yet.", "liked");
-  renderList(dislikedList, payload.disliked || [], "No dislikes yet.", "disliked");
+function applyFilters() {
+  if (!hubPayload) {
+    return;
+  }
+  renderList(
+    feedList,
+    filterItems(hubPayload.seen || []),
+    "Nothing in your feed yet.",
+    "feed",
+  );
+  renderList(
+    likedList,
+    filterItems(hubPayload.liked || []),
+    "No likes yet.",
+    "liked",
+  );
+  renderList(
+    dislikedList,
+    filterItems(hubPayload.disliked || []),
+    "No dislikes yet.",
+    "disliked",
+  );
 }
 
-async function loadFeedbackHub() {
+function renderProfileFilter() {
+  profileFilterChips.innerHTML = "";
+  if (!profiles.length) {
+    return;
+  }
+
+  profiles.forEach((profile) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "feedback-profile-filter-chip";
+    chip.textContent = profileLabel(profile);
+    chip.setAttribute("aria-pressed", selectedProfileIds.has(profile.profile_id) ? "true" : "false");
+    if (selectedProfileIds.has(profile.profile_id)) {
+      chip.classList.add("is-selected");
+    }
+    chip.addEventListener("click", () => {
+      if (selectedProfileIds.has(profile.profile_id)) {
+        selectedProfileIds.delete(profile.profile_id);
+      } else {
+        selectedProfileIds.add(profile.profile_id);
+      }
+      renderProfileFilter();
+      applyFilters();
+    });
+    profileFilterChips.appendChild(chip);
+  });
+}
+
+function renderDateFilter() {
+  dateFilterChips.innerHTML = "";
+
+  DATE_FILTER_OPTIONS.forEach((option) => {
+    const chip = document.createElement("button");
+    chip.type = "button";
+    chip.className = "feedback-profile-filter-chip";
+    chip.textContent = option.label;
+    chip.setAttribute("aria-pressed", selectedDateFilter === option.id ? "true" : "false");
+    if (selectedDateFilter === option.id) {
+      chip.classList.add("is-selected");
+    }
+    chip.addEventListener("click", () => {
+      selectedDateFilter = option.id;
+      renderDateFilter();
+      applyFilters();
+    });
+    dateFilterChips.appendChild(chip);
+  });
+}
+
+async function loadFeedbackHub(options) {
+  const preserveFilters = Boolean(options && options.preserveFilters);
   setStatus("", false);
-  const payload = await apiRequest("/api/feedback/hub", "GET");
-  refreshHub(payload);
+  const previousProfileSelection = preserveFilters ? new Set(selectedProfileIds) : new Set();
+  const previousDateFilter = preserveFilters ? selectedDateFilter : "all";
+
+  const [payload, profilesPayload] = await Promise.all([
+    apiRequest("/api/papers/hub", "GET"),
+    apiRequest("/api/profiles", "GET"),
+  ]);
+
+  hubPayload = payload;
+  profiles = profilesPayload.profiles || [];
+  selectedProfileIds.clear();
+  selectedDateFilter = previousDateFilter;
+
+  if (preserveFilters && previousProfileSelection.size) {
+    profiles.forEach((profile) => {
+      if (previousProfileSelection.has(profile.profile_id)) {
+        selectedProfileIds.add(profile.profile_id);
+      }
+    });
+  }
+
+  if (selectedProfileIds.size === 0) {
+    profiles.forEach((profile) => selectedProfileIds.add(profile.profile_id));
+  }
+
+  renderProfileFilter();
+  renderDateFilter();
+  applyFilters();
 }
 
 async function checkSession() {
@@ -158,7 +352,7 @@ bindMagicLinkForm({
   statusEl: authStatus,
   linkWrapEl: authLinkWrap,
   linkEl: authLink,
-  nextPath: "/feedback",
+  nextPath: "/papers",
 });
 
 async function init() {
@@ -167,10 +361,67 @@ async function init() {
     if (!authenticated) {
       return;
     }
+    setupFeedbackNavigation();
     await loadFeedbackHub();
   } catch (error) {
     setStatus(String(error.message || error), true);
   }
+}
+
+function setActiveNavLink(sectionId) {
+  feedbackNavLinks.forEach((link) => {
+    const href = link.getAttribute("href") || "";
+    const isActive = href === "#" + sectionId;
+    link.classList.toggle("is-active", isActive);
+    link.setAttribute("aria-current", isActive ? "true" : "false");
+  });
+}
+
+function setupFeedbackNavigation() {
+  feedbackNavLinks.forEach((link) => {
+    link.addEventListener("click", (event) => {
+      const href = link.getAttribute("href") || "";
+      if (!href.startsWith("#")) {
+        return;
+      }
+      const target = document.getElementById(href.slice(1));
+      if (!target) {
+        return;
+      }
+      event.preventDefault();
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+      setActiveNavLink(target.id);
+      history.replaceState(null, "", href);
+    });
+  });
+
+  if (!("IntersectionObserver" in window)) {
+    return;
+  }
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      const visible = entries
+        .filter((entry) => entry.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+      if (!visible.length) {
+        return;
+      }
+      setActiveNavLink(visible[0].target.id);
+    },
+    {
+      root: null,
+      rootMargin: "-20% 0px -55% 0px",
+      threshold: [0, 0.1, 0.25, 0.5],
+    },
+  );
+
+  feedbackSectionIds.forEach((sectionId) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      observer.observe(element);
+    }
+  });
 }
 
 init();

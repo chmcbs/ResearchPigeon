@@ -20,11 +20,8 @@ function formatGenerateProgress(progress) {
   if (!progress || !progress.active) {
     return "";
   }
-  var text = progress.label || progress.step || "Working…";
-  if (progress.detail) {
-    text += " " + progress.detail;
-  }
-  return text;
+  // Label only in the digest UI; detail stays on GET /daily-picks/generate/progress for debugging.
+  return progress.label || progress.step || "Working…";
 }
 
 function stopGenerateProgressPolling() {
@@ -175,7 +172,7 @@ async function generateDigest() {
   generateBtn.disabled = true;
   startGenerateProgressPolling();
   try {
-    const profilesPayload = await apiRequest("/profiles", "GET");
+    const profilesPayload = await apiRequest("/api/profiles", "GET");
     const profileIds = (profilesPayload.profiles || [])
       .filter((p) => p.digest_enabled)
       .map((p) => p.profile_id);
