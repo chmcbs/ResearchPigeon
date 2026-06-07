@@ -241,6 +241,55 @@ def test_set_digest_profile_selection_rejects_non_owned_profiles(monkeypatch):
         )
 
 
+def test_reorder_profiles_reassigns_slots(monkeypatch):
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [("p-1",), ("p-2",), ("p-3",)]
+    monkeypatch.setattr(
+        profiles.psycopg, "connect", _mock_connection_with_cursor(cursor)
+    )
+
+    ordered = profiles.reorder_profiles(
+        profile_ids=["p-3", "p-1", "p-2"],
+        user_id="user-1",
+    )
+
+    assert ordered == ["p-3", "p-1", "p-2"]
+    stage_call = next(
+        execute_call
+        for execute_call in cursor.execute.call_args_list
+        if execute_call.args[0] == profiles.STAGE_PROFILE_SLOTS_FOR_REORDER_SQL
+    )
+    assert stage_call.args[1] == ("user-1",)
+    reorder_sql = profiles._build_reorder_profiles_sql(3)
+    reorder_calls = [
+        execute_call
+        for execute_call in cursor.execute.call_args_list
+        if execute_call.args[0] == reorder_sql
+    ]
+    assert len(reorder_calls) == 1
+    assert reorder_calls[0].args[1] == [
+        "p-3",
+        1,
+        "p-1",
+        2,
+        "p-2",
+        3,
+        "user-1",
+        ["p-3", "p-1", "p-2"],
+    ]
+
+
+def test_reorder_profiles_rejects_missing_profile_ids(monkeypatch):
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [("p-1",), ("p-2",)]
+    monkeypatch.setattr(
+        profiles.psycopg, "connect", _mock_connection_with_cursor(cursor)
+    )
+
+    with pytest.raises(ValueError, match="every profile exactly once"):
+        profiles.reorder_profiles(profile_ids=["p-1"], user_id="user-1")
+
+
 def test_update_profile_updates_name_category_and_digest(monkeypatch):
     monkeypatch.setattr(profiles, "get_arxiv_categories", Mock(return_value=["cs.AI", "cs.CL"]))
     existing = ProfileRow(

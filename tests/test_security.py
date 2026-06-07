@@ -44,12 +44,12 @@ def unauthenticated_client(monkeypatch):
 @pytest.mark.parametrize(
     "method,path,json_body",
     [
-        ("GET", "/profiles", None),
+        ("GET", "/api/profiles", None),
         ("GET", "/daily-picks", None),
         ("GET", "/daily-picks/generate/progress", None),
         ("GET", "/daily-picks/debug?profile_id=profile-1", None),
-        ("GET", "/api/feedback/hub", None),
-        ("POST", "/profiles", {"category": "cs.AI", "interest_sentence": "test"}),
+        ("GET", "/api/papers/hub", None),
+        ("POST", "/api/profiles", {"category": "cs.AI", "interest_sentence": "test"}),
         (
             "POST",
             "/daily-picks/generate",
@@ -79,7 +79,7 @@ def test_profiles_list_ignores_spoofed_user_id_query_param(monkeypatch):
     monkeypatch.setattr(routes, "list_profiles_payload", list_mock)
 
     client = TestClient(routes.app)
-    response = client.get("/profiles?user_id=attacker@example.com")
+    response = client.get("/api/profiles?user_id=attacker@example.com")
 
     assert response.status_code == 200
     list_mock.assert_called_once_with(user_id="default")
@@ -105,7 +105,7 @@ def test_magic_link_redirect_rejects_unlisted_paths(monkeypatch):
     )
 
     assert response.status_code == 302
-    assert response.headers["location"] == "/preferences"
+    assert response.headers["location"] == "/profiles"
 
 
 def test_magic_link_redirect_allows_known_app_paths(monkeypatch):
@@ -258,7 +258,7 @@ def test_mutating_route_requires_csrf_when_enabled(monkeypatch):
     client.cookies.set("session_id", "session-123")
 
     response = client.post(
-        "/profiles",
+        "/api/profiles",
         json={"category": "cs.AI", "interest_sentence": "test"},
     )
 
@@ -293,7 +293,7 @@ def test_mutating_route_accepts_matching_csrf_token(monkeypatch):
     client.cookies.set("csrf_token", "csrf-abc")
 
     response = client.post(
-        "/profiles",
+        "/api/profiles",
         json={"category": "cs.AI", "interest_sentence": "test"},
         headers={"X-CSRF-Token": "csrf-abc"},
     )
@@ -483,7 +483,7 @@ def test_security_headers_are_present(monkeypatch):
         Mock(return_value={"user_id": "default", "profiles": []}),
     )
     client = TestClient(routes.app)
-    response = client.get("/profiles")
+    response = client.get("/api/profiles")
 
     assert response.headers["X-Content-Type-Options"] == "nosniff"
     assert response.headers["X-Frame-Options"] == "DENY"
@@ -493,11 +493,11 @@ def test_security_headers_are_present(monkeypatch):
     "next_path,email,expected",
     [
         ("/digest", None, "/digest"),
-        ("//evil.example", None, "/preferences"),
-        ("/admin", None, "/preferences"),
+        ("//evil.example", None, "/profiles"),
+        ("/admin", None, "/profiles"),
         ("/validate", "admin@example.com", "/validate"),
-        ("/validate", "other@example.com", "/preferences"),
-        ("/validate", None, "/preferences"),
+        ("/validate", "other@example.com", "/profiles"),
+        ("/validate", None, "/profiles"),
     ],
 )
 def test_resolve_safe_redirect_path(next_path, email, expected, monkeypatch):

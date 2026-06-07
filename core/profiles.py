@@ -145,6 +145,36 @@ WHERE digest_enabled = TRUE
 ORDER BY category ASC;
 """
 
+LIST_USER_PROFILE_IDS_FOR_UPDATE_SQL = """
+SELECT profile_id::text
+FROM user_profiles
+WHERE user_id = %s
+ORDER BY profile_slot ASC
+FOR UPDATE;
+"""
+
+STAGE_PROFILE_SLOTS_FOR_REORDER_SQL = """
+UPDATE user_profiles
+SET profile_slot = profile_slot + 3, updated_at = NOW()
+WHERE user_id = %s
+  AND profile_slot BETWEEN 1 AND 3;
+"""
+
+
+def _build_reorder_profiles_sql(profile_count: int) -> str:
+    when_clauses = "\n        ".join(
+        f"WHEN %s::uuid THEN %s" for _ in range(profile_count)
+    )
+    return f"""
+UPDATE user_profiles
+SET profile_slot = CASE profile_id
+        {when_clauses}
+    END,
+    updated_at = NOW()
+WHERE user_id = %s
+  AND profile_id = ANY(%s::uuid[]);
+"""
+
 
 def _validate_interest_sentence(interest_sentence: str) -> str:
     value = interest_sentence.strip()
@@ -388,6 +418,40 @@ def set_digest_profile_selection(
 
     selected = [row[0] for row in rows]
     return selected
+
+
+def reorder_profiles(
+    profile_ids: list[str],
+    user_id: str = DEFAULT_USER_ID,
+    conn=None,
+) -> list[str]:
+    ordered_profile_ids = list(dict.fromkeys(profile_ids))
+    if not ordered_profile_ids:
+        raise ValueError("profile_ids must not be empty")
+
+    with connection_scope(conn) as active_conn:
+        with active_conn.cursor() as cur:
+            cur.execute(LIST_USER_PROFILE_IDS_FOR_UPDATE_SQL, (user_id,))
+            existing_profile_ids = [row[0] for row in cur.fetchall()]
+
+            if len(ordered_profile_ids) != len(existing_profile_ids):
+                raise ValueError("profile_ids must include every profile exactly once")
+
+            if set(ordered_profile_ids) != set(existing_profile_ids):
+                raise ValueError("some profile_ids do not belong to user")
+
+            cur.execute(STAGE_PROFILE_SLOTS_FOR_REORDER_SQL, (user_id,))
+
+            reorder_params: list[object] = []
+            for slot, profile_id in enumerate(ordered_profile_ids, start=1):
+                reorder_params.extend([profile_id, slot])
+            reorder_params.extend([user_id, ordered_profile_ids])
+            cur.execute(
+                _build_reorder_profiles_sql(len(ordered_profile_ids)),
+                reorder_params,
+            )
+
+    return ordered_profile_ids
 
 
 def update_profile(

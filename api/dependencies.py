@@ -15,11 +15,13 @@ from api.schemas import (
     CreateProfileRequest,
     FeedbackRequest,
     RemoveFeedbackRequest,
+    DeletePaperRequest,
     GenerateDailyPicksRequest,
     ManageProfileKeywordRequest,
     RequestMagicLinkRequest,
     UpdateProfileRequest,
     UpdateDigestSelectionRequest,
+    ReorderProfilesRequest,
 )
 from api.services.auth import (
     request_magic_link_payload as request_magic_link_payload_service,
@@ -35,6 +37,9 @@ from api.services.feedback import (
     remove_feedback_payload as remove_feedback_payload_service,
     save_feedback_payload as save_feedback_payload_service,
 )
+from api.services.paper_delete import (
+    delete_paper_payload as delete_paper_payload_service,
+)
 from api.services.errors import InternalServerError, NotFoundError
 from api.services.feedback_hub import get_feedback_hub_payload as get_feedback_hub_payload_service
 from api.services.metrics import get_metrics_payload as get_metrics_payload_service
@@ -47,6 +52,7 @@ from api.services.profiles import (
     remove_profile_keyword_payload as remove_profile_keyword_payload_service,
     update_profile_payload as update_profile_payload_service,
     update_digest_selection_payload as update_digest_selection_payload_service,
+    reorder_profiles_payload as reorder_profiles_payload_service,
 )
 from api.services.debug_digest_reset import reset_papers_and_runs, reset_user_profiles
 from api.unit_of_work import ApiUnitOfWork, open_api_unit_of_work
@@ -73,6 +79,7 @@ from core.db import get_database_url
 from core.email import EmailDeliveryError, send_magic_link_email
 from core.rate_limit import RateLimitExceeded, check_rate_limit
 from core.security import can_use_debug_features, verify_internal_cron_token
+from core.paper_history import dismiss_paper
 from core.preferences import (
     initialize_preference_embedding,
     remove_feedback,
@@ -87,6 +94,7 @@ from core.profiles import (
     list_profile_keywords,
     remove_profile_keyword,
     set_digest_profile_selection,
+    reorder_profiles,
     update_profile,
 )
 
@@ -102,6 +110,8 @@ def _to_http_exception(error: Exception) -> HTTPException:
         return HTTPException(status_code=404, detail=str(error))
     if isinstance(error, RateLimitExceeded):
         return HTTPException(status_code=429, detail=str(error))
+    if isinstance(error, psycopg.Error):
+        return HTTPException(status_code=500, detail="Database error")
     return HTTPException(status_code=400, detail=str(error))
 
 
@@ -408,6 +418,31 @@ def remove_feedback_payload(
         raise _to_http_exception(error) from error
 
 
+def delete_paper_payload(
+    request: DeletePaperRequest,
+    user_id: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    try:
+        with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            return delete_paper_payload_service(
+                request=request,
+                user_id=user_id,
+                resolve_profile=lambda user_id, profile_id: _resolve_profile(
+                    user_id=user_id,
+                    profile_id=profile_id,
+                    conn=active_uow.conn,
+                ),
+                dismiss_paper=lambda **kwargs: dismiss_paper(
+                    conn=active_uow.conn,
+                    **kwargs,
+                ),
+            )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 def get_feedback_hub_payload(
     user_id: str,
     profile_id: str | None = None,
@@ -554,6 +589,28 @@ def update_digest_selection_payload(
                 ),
             )
     except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+def reorder_profiles_payload(
+    request: ReorderProfilesRequest,
+    user_id: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    try:
+        with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            return reorder_profiles_payload_service(
+                request=request,
+                user_id=user_id,
+                reorder_profiles=lambda **kwargs: reorder_profiles(
+                    conn=active_uow.conn,
+                    **kwargs,
+                ),
+            )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+    except psycopg.Error as error:
         raise _to_http_exception(error) from error
 
 

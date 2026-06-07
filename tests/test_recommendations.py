@@ -126,6 +126,7 @@ def test_generate_recommendations_respects_k_override(monkeypatch):
         "profile-1",
         "profile-1",
         "profile-1",
+        "profile-1",
         0.25,
         0.25,
         "profile-1",

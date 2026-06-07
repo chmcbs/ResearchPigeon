@@ -59,6 +59,21 @@ def update_digest_selection_payload(
     }
 
 
+def reorder_profiles_payload(
+    request,
+    user_id: str,
+    reorder_profiles: Callable[..., list[str]],
+) -> dict:
+    ordered_profile_ids = reorder_profiles(
+        profile_ids=request.profile_ids,
+        user_id=user_id,
+    )
+    return {
+        "user_id": user_id,
+        "profile_ids": ordered_profile_ids,
+    }
+
+
 def add_profile_keyword_payload(
     profile_id: str,
     request,

@@ -27,6 +27,12 @@ LEFT JOIN paper_feedback pf
  AND pf.arxiv_id = rec.arxiv_id
 WHERE up.user_id = %s
   AND (%s::uuid IS NULL OR rec.profile_id = %s::uuid)
+  AND NOT EXISTS (
+    SELECT 1
+    FROM profile_dismissed_papers dp
+    WHERE dp.profile_id = rec.profile_id
+      AND dp.arxiv_id = rec.arxiv_id
+  )
 ORDER BY DATE(rec.generated_at) DESC, rec.final_score DESC, rec.rank ASC;
 """
 

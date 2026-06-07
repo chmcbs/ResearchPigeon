@@ -34,6 +34,10 @@ feedback_excluded AS (
     FROM paper_feedback
     WHERE profile_id = %s
       AND label IN ('like', 'dislike')
+    UNION
+    SELECT arxiv_id
+    FROM profile_dismissed_papers
+    WHERE profile_id = %s
 ),
 seen_papers AS (
     SELECT DISTINCT arxiv_id

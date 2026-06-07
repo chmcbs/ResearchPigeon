@@ -37,7 +37,7 @@ def test_feedback_hub_route_returns_sections(monkeypatch):
     )
 
     client = TestClient(routes.app)
-    response = client.get("/api/feedback/hub")
+    response = client.get("/api/papers/hub")
 
     assert response.status_code == 200
     body = response.json()
@@ -200,7 +200,7 @@ def test_profiles_digest_selection_route_uses_static_handler(monkeypatch):
 
     client = TestClient(routes.app)
     response = client.put(
-        "/profiles/digest-selection",
+        "/api/profiles/digest-selection",
         json={"profile_ids": ["profile-1"]},
     )
 
@@ -217,7 +217,7 @@ def test_profiles_delete_works_without_request_body(monkeypatch):
     monkeypatch.setattr(routes, "delete_profile_payload", delete_mock)
 
     client = TestClient(routes.app)
-    response = client.delete("/profiles/profile-1")
+    response = client.delete("/api/profiles/profile-1")
 
     assert response.status_code == 200
     assert response.json() == {"profile_id": "profile-1", "deleted": True}
@@ -238,22 +238,25 @@ def test_validate_route_returns_internal_validation_ui():
     assert "Profile Keywords" in response.text
 
 
-def test_landing_preferences_and_digest_pages_are_served():
+def test_landing_profiles_and_digest_pages_are_served():
     client = TestClient(routes.app)
 
     landing = client.get("/")
-    prefs = client.get("/preferences")
+    profiles = client.get("/profiles")
+    preferences_redirect = client.get("/preferences", follow_redirects=False)
     digest = client.get("/digest")
-    feedback = client.get("/feedback")
+    papers = client.get("/papers")
 
     assert landing.status_code == 200
     assert "<title>arXiv Assistant</title>" in landing.text
-    assert prefs.status_code == 200
-    assert "<title>Preferences - arXiv Assistant</title>" in prefs.text
+    assert profiles.status_code == 200
+    assert "<title>Profiles - arXiv Assistant</title>" in profiles.text
+    assert preferences_redirect.status_code == 307
+    assert preferences_redirect.headers["location"] == "/profiles"
     assert digest.status_code == 200
     assert "<title>Daily Digest - arXiv Assistant</title>" in digest.text
-    assert feedback.status_code == 200
-    assert "<title>Feedback - arXiv Assistant</title>" in feedback.text
+    assert papers.status_code == 200
+    assert "<title>Papers - arXiv Assistant</title>" in papers.text
 
 
 def test_magic_link_request_route_returns_payload(monkeypatch):
@@ -291,7 +294,7 @@ def test_magic_link_verify_sets_session_cookie_and_redirects(monkeypatch):
     response = client.get("/auth/magic-link/verify?token=abc", follow_redirects=False)
 
     assert response.status_code == 302
-    assert response.headers["location"] == "/preferences"
+    assert response.headers["location"] == "/profiles"
     assert "session_id=session-123" in response.headers["set-cookie"]
 
 

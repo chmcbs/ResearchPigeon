@@ -28,12 +28,14 @@ from api.dependencies import (
     remove_profile_keyword_payload,
     request_magic_link_payload,
     remove_feedback_payload,
+    delete_paper_payload,
     require_authenticated_user_id,
     require_debug_admin,
     require_internal_cron_token,
     run_daily_digest_cron_payload,
     save_feedback_payload,
     update_digest_selection_payload,
+    reorder_profiles_payload,
     update_profile_payload,
     verify_magic_link_payload,
     _client_ip,
@@ -53,6 +55,8 @@ from api.schemas import (
     FeedbackHubResponse,
     RemoveFeedbackRequest,
     RemoveFeedbackResponse,
+    DeletePaperRequest,
+    DeletePaperResponse,
     GenerateDailyPicksRequest,
     GenerateDailyPicksProgressResponse,
     GenerateDailyPicksResponse,
@@ -61,6 +65,8 @@ from api.schemas import (
     ManageProfileKeywordResponse,
     RequestMagicLinkRequest,
     RequestMagicLinkResponse,
+    ReorderProfilesRequest,
+    ReorderProfilesResponse,
     UpdateDigestSelectionRequest,
     UpdateDigestSelectionResponse,
     UpdateProfileRequest,
@@ -152,9 +158,14 @@ def landing_page() -> FileResponse:
     return FileResponse(frontend_dir / "index.html")
 
 
-@app.get("/preferences", response_class=FileResponse)
-def preferences_page() -> FileResponse:
+@app.get("/profiles", response_class=FileResponse)
+def profiles_page() -> FileResponse:
     return FileResponse(frontend_dir / "preferences.html")
+
+
+@app.get("/preferences")
+def preferences_page_redirect() -> RedirectResponse:
+    return RedirectResponse("/profiles", status_code=307)
 
 
 @app.get("/digest", response_class=FileResponse)
@@ -162,8 +173,8 @@ def digest_page() -> FileResponse:
     return FileResponse(frontend_dir / "digest.html")
 
 
-@app.get("/feedback", response_class=FileResponse)
-def feedback_page() -> FileResponse:
+@app.get("/papers", response_class=FileResponse)
+def papers_page() -> FileResponse:
     return FileResponse(frontend_dir / "feedback.html")
 
 
@@ -208,7 +219,7 @@ def auth_request_magic_link(body: RequestMagicLinkRequest, request: Request) -> 
 def auth_verify_magic_link(
     token: str,
     request: Request,
-    next: str = "/preferences",
+    next: str = "/profiles",
 ) -> RedirectResponse:
     payload = verify_magic_link_payload(token=token, client_ip=_client_ip(request))
     redirect_target = resolve_safe_redirect_path(next, email=payload["email"])
@@ -290,8 +301,8 @@ def debug_reset_digest_data(request: Request) -> dict:
 ############### FEEDBACK ###############
 ########################################
 
-@app.get("/api/feedback/hub", response_model=FeedbackHubResponse)
-def feedback_hub(
+@app.get("/api/papers/hub", response_model=FeedbackHubResponse)
+def papers_hub(
     request: Request,
     profile_id: str | None = None,
 ) -> dict:
@@ -314,23 +325,29 @@ def feedback_delete(body: RemoveFeedbackRequest, request: Request) -> dict:
     return remove_feedback_payload(body, user_id=user_id)
 
 
+@app.delete("/api/papers", response_model=DeletePaperResponse)
+def papers_delete(body: DeletePaperRequest, request: Request) -> dict:
+    user_id = require_authenticated_user_id(request)
+    return delete_paper_payload(body, user_id=user_id)
+
+
 ########################################
 ############### PROFILES ###############
 ########################################
 
-@app.post("/profiles", response_model=CreateProfileResponse)
+@app.post("/api/profiles", response_model=CreateProfileResponse)
 def profiles_create(body: CreateProfileRequest, request: Request) -> dict:
     user_id = require_authenticated_user_id(request)
     return create_profile_payload(body, user_id=user_id)
 
 
-@app.get("/profiles", response_model=ListProfilesResponse)
+@app.get("/api/profiles", response_model=ListProfilesResponse)
 def profiles_list(request: Request) -> dict:
     user_id = require_authenticated_user_id(request)
     return list_profiles_payload(user_id=user_id)
 
 
-@app.put("/profiles/digest-selection", response_model=UpdateDigestSelectionResponse)
+@app.put("/api/profiles/digest-selection", response_model=UpdateDigestSelectionResponse)
 def profiles_digest_selection_update(
     body: UpdateDigestSelectionRequest,
     request: Request,
@@ -339,7 +356,16 @@ def profiles_digest_selection_update(
     return update_digest_selection_payload(body, user_id=user_id)
 
 
-@app.put("/profiles/{profile_id}", response_model=UpdateProfileResponse)
+@app.put("/api/profiles/order", response_model=ReorderProfilesResponse)
+def profiles_order_update(
+    body: ReorderProfilesRequest,
+    request: Request,
+) -> dict:
+    user_id = require_authenticated_user_id(request)
+    return reorder_profiles_payload(body, user_id=user_id)
+
+
+@app.put("/api/profiles/{profile_id}", response_model=UpdateProfileResponse)
 def profiles_update(
     profile_id: str,
     body: UpdateProfileRequest,
@@ -349,7 +375,7 @@ def profiles_update(
     return update_profile_payload(profile_id=profile_id, request=body, user_id=user_id)
 
 
-@app.delete("/profiles/{profile_id}", response_model=DeleteProfileResponse)
+@app.delete("/api/profiles/{profile_id}", response_model=DeleteProfileResponse)
 def profiles_delete(profile_id: str, request: Request) -> dict:
     user_id = require_authenticated_user_id(request)
     return delete_profile_payload(profile_id=profile_id, user_id=user_id)
@@ -364,7 +390,9 @@ def debug_reset_profile_data(request: Request) -> dict:
 ############### KEYWORDS ###############
 ########################################
 
-@app.get("/profiles/{profile_id}/keywords", response_model=ManageProfileKeywordResponse)
+@app.get(
+    "/api/profiles/{profile_id}/keywords", response_model=ManageProfileKeywordResponse
+)
 def profiles_keywords_list(
     request: Request,
     profile_id: str,
@@ -377,7 +405,8 @@ def profiles_keywords_list(
 
 
 @app.post(
-    "/profiles/{profile_id}/keywords", response_model=ManageProfileKeywordResponse
+    "/api/profiles/{profile_id}/keywords",
+    response_model=ManageProfileKeywordResponse,
 )
 def profiles_keywords_add(
     profile_id: str,
@@ -393,7 +422,8 @@ def profiles_keywords_add(
 
 
 @app.delete(
-    "/profiles/{profile_id}/keywords", response_model=ManageProfileKeywordResponse
+    "/api/profiles/{profile_id}/keywords",
+    response_model=ManageProfileKeywordResponse,
 )
 def profiles_keywords_remove(
     profile_id: str,

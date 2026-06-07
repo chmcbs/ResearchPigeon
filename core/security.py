@@ -18,9 +18,9 @@ CSRF_HEADER_NAME = "x-csrf-token"
 PUBLIC_MAGIC_LINK_REDIRECTS = frozenset(
     {
         "/",
-        "/preferences",
+        "/profiles",
         "/digest",
-        "/feedback",
+        "/papers",
     }
 )
 
@@ -32,16 +32,16 @@ def generate_csrf_token() -> str:
 
 
 def resolve_safe_redirect_path(next_path: str, *, email: str | None = None) -> str:
-    normalized = (next_path or "/preferences").strip()
+    normalized = (next_path or "/profiles").strip()
     if not normalized.startswith("/") or normalized.startswith("//"):
-        return "/preferences"
+        return "/profiles"
 
     path_only = normalized.split("?", 1)[0].split("#", 1)[0]
     if path_only in PUBLIC_MAGIC_LINK_REDIRECTS:
         return path_only
     if path_only in DEBUG_MAGIC_LINK_REDIRECTS and can_use_debug_features(email):
         return path_only
-    return "/preferences"
+    return "/profiles"
 
 
 def is_csrf_enforcement_enabled() -> bool:

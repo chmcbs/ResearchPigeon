@@ -77,6 +77,7 @@ def generate_recommendations(
                     resolved_profile_id,
                     resolved_profile_id,
                     resolved_profile_id,
+                    resolved_profile_id,
                     get_keyword_boost_cap(),
                     get_keyword_boost_cap(),
                     resolved_profile_id,

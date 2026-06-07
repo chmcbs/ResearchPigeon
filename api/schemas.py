@@ -138,6 +138,21 @@ class RemoveFeedbackResponse(BaseModel):
     preference_updated: bool
 
 
+class DeletePaperRequest(BaseModel):
+    arxiv_id: str
+    profile_id: str
+
+
+class DeletePaperResponse(BaseModel):
+    user_id: str
+    profile_id: str
+    arxiv_id: str
+    dismissed: bool
+    feedback_removed: bool
+    recommendations_removed: int
+    preference_updated: bool
+
+
 class FeedbackHubPaper(BaseModel):
     arxiv_id: str
     title: str
@@ -204,6 +219,15 @@ class UpdateDigestSelectionRequest(BaseModel):
 class UpdateDigestSelectionResponse(BaseModel):
     user_id: str
     selected_profile_ids: list[str]
+
+
+class ReorderProfilesRequest(BaseModel):
+    profile_ids: list[str] = Field(min_length=1)
+
+
+class ReorderProfilesResponse(BaseModel):
+    user_id: str
+    profile_ids: list[str]
 
 
 class RequestMagicLinkRequest(BaseModel):

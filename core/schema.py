@@ -93,7 +93,7 @@ CREATE_USER_PROFILES_TABLE = """
 CREATE TABLE IF NOT EXISTS user_profiles (
     profile_id UUID PRIMARY KEY,
     user_id TEXT NOT NULL,
-    profile_slot SMALLINT NOT NULL CHECK (profile_slot BETWEEN 1 AND 3),
+    profile_slot SMALLINT NOT NULL CHECK (profile_slot BETWEEN 1 AND 6),
     profile_name TEXT NOT NULL DEFAULT 'Profile',
     category TEXT NOT NULL,
     interest_sentence TEXT NOT NULL,
@@ -117,6 +117,15 @@ ADD COLUMN IF NOT EXISTS digest_enabled BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER_USER_PROFILES_ADD_PROFILE_NAME = """
 ALTER TABLE user_profiles
 ADD COLUMN IF NOT EXISTS profile_name TEXT NOT NULL DEFAULT 'Profile';
+"""
+
+ALTER_USER_PROFILES_EXPAND_PROFILE_SLOT_CHECK = """
+ALTER TABLE user_profiles
+DROP CONSTRAINT IF EXISTS user_profiles_profile_slot_check;
+
+ALTER TABLE user_profiles
+ADD CONSTRAINT user_profiles_profile_slot_check
+CHECK (profile_slot BETWEEN 1 AND 6);
 """
 
 
@@ -161,6 +170,20 @@ CREATE TABLE IF NOT EXISTS paper_feedback (
 CREATE_PAPER_FEEDBACK_PROFILE_PAPER_INDEX = """
 CREATE UNIQUE INDEX IF NOT EXISTS paper_feedback_profile_paper_idx
 ON paper_feedback (profile_id, arxiv_id);
+"""
+
+CREATE_PROFILE_DISMISSED_PAPERS_TABLE = """
+CREATE TABLE IF NOT EXISTS profile_dismissed_papers (
+    profile_id UUID NOT NULL REFERENCES user_profiles(profile_id) ON DELETE CASCADE,
+    arxiv_id TEXT NOT NULL REFERENCES papers(arxiv_id) ON DELETE CASCADE,
+    dismissed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (profile_id, arxiv_id)
+);
+"""
+
+CREATE_PROFILE_DISMISSED_PAPERS_PROFILE_INDEX = """
+CREATE INDEX IF NOT EXISTS profile_dismissed_papers_profile_idx
+ON profile_dismissed_papers (profile_id, dismissed_at DESC);
 """
 
 
@@ -289,6 +312,7 @@ def main():
             cur.execute(CREATE_USER_PROFILES_TABLE)
             cur.execute(ALTER_USER_PROFILES_ADD_DIGEST_ENABLED)
             cur.execute(ALTER_USER_PROFILES_ADD_PROFILE_NAME)
+            cur.execute(ALTER_USER_PROFILES_EXPAND_PROFILE_SLOT_CHECK)
             cur.execute(CREATE_USER_PROFILES_USER_INDEX)
             cur.execute(CREATE_PROFILE_PREFERENCES_TABLE)
             cur.execute(CREATE_PROFILE_KEYWORDS_TABLE)
@@ -298,6 +322,8 @@ def main():
             cur.execute(CREATE_AUTH_SESSIONS_USER_INDEX)
             cur.execute(CREATE_PAPER_FEEDBACK_TABLE)
             cur.execute(CREATE_PAPER_FEEDBACK_PROFILE_PAPER_INDEX)
+            cur.execute(CREATE_PROFILE_DISMISSED_PAPERS_TABLE)
+            cur.execute(CREATE_PROFILE_DISMISSED_PAPERS_PROFILE_INDEX)
             cur.execute(CREATE_RECOMMENDATIONS_TABLE)
             cur.execute(ALTER_RECOMMENDATIONS_ADD_BASE_DENSE_SCORE)
             cur.execute(ALTER_RECOMMENDATIONS_ADD_KEYWORD_BOOST)
