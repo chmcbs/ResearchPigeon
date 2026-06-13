@@ -8,10 +8,12 @@ const prefsStatus = document.getElementById("prefs-status");
 const profilesGrid = document.getElementById("profiles-grid");
 const addProfileBtn = document.getElementById("add-profile-btn");
 const debugResetProfilesBtn = document.getElementById("debug-reset-profiles-btn");
+const digestEmailsToggle = document.getElementById("digest-emails-toggle");
 const cardTemplate = document.getElementById("profile-card-template");
 
 let categories = [];
 let profiles = [];
+let digestSubscribed = true;
 
 function setStatus(message, isError) {
   setPageStatus(prefsStatus, message, isError);
@@ -262,6 +264,23 @@ function attachProfileDragBehavior(card, profile) {
   });
 }
 
+async function loadEmailSettings() {
+  const payload = await apiRequest("/api/email-settings", "GET");
+  digestSubscribed = Boolean(payload.digest_subscribed);
+  digestEmailsToggle.checked = digestSubscribed;
+  profilesGrid.classList.toggle("digest-paused", !digestSubscribed);
+}
+
+async function updateDigestSubscription(enabled) {
+  const payload = await apiRequest("/api/email-settings", "PATCH", {
+    digest_subscribed: enabled,
+  });
+  digestSubscribed = Boolean(payload.digest_subscribed);
+  digestEmailsToggle.checked = digestSubscribed;
+  profilesGrid.classList.toggle("digest-paused", !digestSubscribed);
+  renderProfiles();
+}
+
 async function loadProfiles() {
   const payload = await apiRequest("/api/profiles", "GET");
   profiles = payload.profiles || [];
@@ -318,6 +337,9 @@ function renderProfiles() {
     interestText.readOnly = !isDraft;
     interestText.placeholder = isDraft ? "Describe your research interests." : "";
     digestCheckbox.checked = profile.digest_enabled;
+    const digestPaused = !digestSubscribed;
+    digestCheckbox.disabled = digestPaused || isDraft;
+    node.classList.toggle("digest-paused", digestPaused);
     saveBtn.textContent = isDraft ? "Create profile" : "Save profile";
     deleteBtn.textContent = isDraft ? "Cancel" : "Delete";
     saveBtn.classList.toggle("hidden", !isEditing);
@@ -661,6 +683,10 @@ function renderProfiles() {
     });
 
     digestCheckbox.addEventListener("change", async () => {
+      if (!digestSubscribed) {
+        digestCheckbox.checked = profile.digest_enabled;
+        return;
+      }
       profile.digest_enabled = digestCheckbox.checked;
       if (isDraft) {
         return;
@@ -758,6 +784,20 @@ debugResetProfilesBtn.addEventListener("click", async () => {
   }
 });
 
+digestEmailsToggle.addEventListener("change", async () => {
+  const nextValue = digestEmailsToggle.checked;
+  digestEmailsToggle.disabled = true;
+  try {
+    await updateDigestSubscription(nextValue);
+    setStatus("", false);
+  } catch (error) {
+    digestEmailsToggle.checked = digestSubscribed;
+    setStatus(String(error.message || error), true);
+  } finally {
+    digestEmailsToggle.disabled = false;
+  }
+});
+
 async function init() {
   try {
     const authenticated = await checkSession();
@@ -765,6 +805,7 @@ async function init() {
       return;
     }
     await loadCategories();
+    await loadEmailSettings();
     await loadProfiles();
   } catch (error) {
     setStatus(String(error.message || error), true);

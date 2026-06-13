@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Profiles - arXiv Assistant</title>
-  <link rel="stylesheet" href="/static/styles.css?v=12">
+  <link rel="stylesheet" href="/static/styles.css?v=13">
 </head>
 <body>
   <header class="topbar">
@@ -50,6 +50,13 @@
         </div>
       </div>
       <p id="prefs-status" class="status muted"></p>
+      <section class="panel email-settings-panel">
+        <label class="checkbox-row digest-emails-toggle">
+          <input id="digest-emails-toggle" type="checkbox" checked>
+          Digest emails
+        </label>
+        <p class="muted email-settings-hint">Choose which profiles are included below.</p>
+      </section>
       <div id="profiles-grid" class="profiles-grid"></div>
       <p class="profiles-order-tip muted">Tip: drag profiles to change their order in your daily digest!</p>
     </section>
@@ -106,6 +113,6 @@
   <script src="/static/api-client.js"></script>
   <script src="/static/auth-ui.js"></script>
   <script src="/static/format.js"></script>
-  <script src="/static/preferences.js?v=20"></script>
+  <script src="/static/preferences.js?v=21"></script>
 </body>
 </html>

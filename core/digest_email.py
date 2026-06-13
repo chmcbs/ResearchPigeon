@@ -15,6 +15,7 @@ from core.digest_content import (
     count_digest_picks,
 )
 from core.email import EmailDeliveryError, deliver_email_message
+from core.email_settings import build_unsubscribe_url, ensure_email_settings
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -74,17 +75,28 @@ def build_digest_email_subject(*, generated_at: datetime | None = None) -> str:
     return f"Your daily research digest — {date_label}"
 
 
-def _digest_urls(*, app_base_url: str | None = None) -> tuple[str, str, str]:
+def _digest_urls(
+    *,
+    app_base_url: str | None = None,
+    unsubscribe_url: str | None = None,
+) -> tuple[str, str, str, str]:
     base_url = (app_base_url or get_app_base_url()).rstrip("/")
-    return base_url, f"{base_url}/profiles", f"{base_url}/papers"
+    preferences_url = f"{base_url}/profiles"
+    feedback_url = f"{base_url}/papers"
+    resolved_unsubscribe_url = unsubscribe_url or f"{base_url}/email/unsubscribe"
+    return base_url, preferences_url, feedback_url, resolved_unsubscribe_url
 
 
 def build_digest_email_body(
     sections: list[DigestSection],
     *,
     app_base_url: str | None = None,
+    unsubscribe_url: str | None = None,
 ) -> str:
-    _, preferences_url, feedback_url = _digest_urls(app_base_url=app_base_url)
+    _, preferences_url, feedback_url, resolved_unsubscribe_url = _digest_urls(
+        app_base_url=app_base_url,
+        unsubscribe_url=unsubscribe_url,
+    )
 
     lines = [
         f"Your daily research digest from {PRODUCT_NAME}",
@@ -104,7 +116,8 @@ def build_digest_email_body(
         [
             "---",
             f"Rate papers: {feedback_url}",
-            f"Manage profiles: {preferences_url}",
+            f"Manage preferences: {preferences_url}",
+            f"Unsubscribe: {resolved_unsubscribe_url}",
             "",
             "Not affiliated with arXiv. Papers are sourced from arXiv.org.",
         ]
@@ -116,8 +129,12 @@ def build_digest_email_html(
     sections: list[DigestSection],
     *,
     app_base_url: str | None = None,
+    unsubscribe_url: str | None = None,
 ) -> str:
-    _, preferences_url, feedback_url = _digest_urls(app_base_url=app_base_url)
+    _, preferences_url, feedback_url, resolved_unsubscribe_url = _digest_urls(
+        app_base_url=app_base_url,
+        unsubscribe_url=unsubscribe_url,
+    )
 
     section_blocks: list[str] = []
     for index, section in enumerate(sections):
@@ -200,11 +217,18 @@ def build_digest_email_html(
         f'<a href="{escape(feedback_url, quote=True)}" style="{CTA_BUTTON_STYLE}">'
         f"Rate papers</a>"
         f'<a href="{escape(preferences_url, quote=True)}" style="{CTA_BUTTON_STYLE}">'
-        f"Manage profiles</a>"
+        f"Manage preferences</a>"
         f"</div>"
     )
+    footer_links = (
+        f'<p style="margin:16px 0 0;font-size:12px;color:#6b7280;line-height:1.5;'
+        f'text-align:center;">'
+        f'<a href="{escape(resolved_unsubscribe_url, quote=True)}" '
+        f'style="color:#6b7280;">Unsubscribe from digest emails</a>'
+        f"</p>"
+    )
     disclaimer = (
-        '<p style="margin:16px 0 0;font-size:12px;color:#6b7280;line-height:1.5;'
+        '<p style="margin:8px 0 0;font-size:12px;color:#6b7280;line-height:1.5;'
         'text-align:center;">'
         "Not affiliated with arXiv. Papers are sourced from arXiv.org."
         "</p>"
@@ -224,6 +248,7 @@ def build_digest_email_html(
       {"".join(section_blocks)}
       {cta_block}
     </div>
+    {footer_links}
     {disclaimer}
   </div>
 </body>
@@ -287,9 +312,18 @@ def deliver_digest_email_for_user(
         )
         return {"status": "skipped_no_picks", "error_message": None}
 
+    ensure_email_settings(user_id, conn=conn)
+    unsubscribe_url = build_unsubscribe_url(user_id)
+
     subject = build_digest_email_subject()
-    plain_body = build_digest_email_body(sections)
-    html_body = build_digest_email_html(sections)
+    plain_body = build_digest_email_body(
+        sections,
+        unsubscribe_url=unsubscribe_url,
+    )
+    html_body = build_digest_email_html(
+        sections,
+        unsubscribe_url=unsubscribe_url,
+    )
 
     try:
         send_digest_email(

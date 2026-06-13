@@ -187,6 +187,16 @@ class ListProfilesResponse(BaseModel):
     profiles: list[ProfileSummary]
 
 
+class EmailSettingsResponse(BaseModel):
+    user_id: str
+    digest_subscribed: bool
+    unsubscribed_at: datetime | None = None
+
+
+class UpdateEmailSettingsRequest(BaseModel):
+    digest_subscribed: bool
+
+
 class UpdateProfileRequest(BaseModel):
     profile_name: str | None = None
     category: str | None = None

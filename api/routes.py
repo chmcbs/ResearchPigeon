@@ -4,6 +4,7 @@ HTTP route definitions for the API service
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import quote
 
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
@@ -20,6 +21,7 @@ from api.dependencies import (
     get_auth_session_payload,
     get_daily_picks_payload,
     get_debug_daily_picks_payload,
+    get_email_settings_payload,
     get_feedback_hub_payload,
     get_metrics_payload,
     list_profile_keywords_payload,
@@ -32,9 +34,12 @@ from api.dependencies import (
     require_authenticated_user_id,
     require_debug_admin,
     require_internal_cron_token,
+    resubscribe_by_token_payload,
     run_daily_digest_cron_payload,
     save_feedback_payload,
+    unsubscribe_by_token_payload,
     update_digest_selection_payload,
+    update_email_settings_payload,
     reorder_profiles_payload,
     update_profile_payload,
     verify_magic_link_payload,
@@ -72,6 +77,8 @@ from api.schemas import (
     UpdateProfileRequest,
     UpdateProfileResponse,
     DeleteProfileResponse,
+    EmailSettingsResponse,
+    UpdateEmailSettingsRequest,
 )
 from core.config import get_arxiv_category_options, is_app_https, is_production
 from core.db import check_database_connection
@@ -182,6 +189,47 @@ def papers_page() -> FileResponse:
 def validate(request: Request) -> FileResponse:
     require_debug_admin(request)
     return FileResponse(frontend_dir / "validate.html")
+
+
+@app.get("/email/preferences", response_class=FileResponse)
+def email_preferences_page() -> FileResponse:
+    return FileResponse(frontend_dir / "email-preferences.html")
+
+
+@app.get("/email/unsubscribe")
+def email_unsubscribe(token: str) -> RedirectResponse:
+    payload = unsubscribe_by_token_payload(token=token)
+    if payload["user_id"] is None:
+        response = RedirectResponse(
+            url="/email/preferences?status=invalid",
+            status_code=302,
+        )
+    else:
+        response = RedirectResponse(
+            url=f"/email/preferences?status=unsubscribed&token={quote(token, safe='')}",
+            status_code=302,
+        )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
+@app.get("/email/resubscribe")
+def email_resubscribe(token: str) -> RedirectResponse:
+    payload = resubscribe_by_token_payload(token=token)
+    if payload["user_id"] is None:
+        response = RedirectResponse(
+            url="/email/preferences?status=invalid",
+            status_code=302,
+        )
+    else:
+        response = RedirectResponse(
+            url=f"/email/preferences?status=resubscribed&token={quote(token, safe='')}",
+            status_code=302,
+        )
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
 
 
 @app.get("/categories")
@@ -345,6 +393,21 @@ def profiles_create(body: CreateProfileRequest, request: Request) -> dict:
 def profiles_list(request: Request) -> dict:
     user_id = require_authenticated_user_id(request)
     return list_profiles_payload(user_id=user_id)
+
+
+@app.get("/api/email-settings", response_model=EmailSettingsResponse)
+def email_settings_get(request: Request) -> dict:
+    user_id = require_authenticated_user_id(request)
+    return get_email_settings_payload(user_id=user_id)
+
+
+@app.patch("/api/email-settings", response_model=EmailSettingsResponse)
+def email_settings_update(
+    body: UpdateEmailSettingsRequest,
+    request: Request,
+) -> dict:
+    user_id = require_authenticated_user_id(request)
+    return update_email_settings_payload(body, user_id=user_id)
 
 
 @app.put("/api/profiles/digest-selection", response_model=UpdateDigestSelectionResponse)

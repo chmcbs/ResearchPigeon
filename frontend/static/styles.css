@@ -122,6 +122,39 @@ body {
   height: 16px;
 }
 
+.email-settings-panel {
+  margin-bottom: 16px;
+}
+
+.digest-emails-toggle {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.email-settings-hint {
+  margin: 8px 0 0;
+}
+
+.profile-card.digest-paused {
+  opacity: 0.55;
+}
+
+.profile-card.digest-paused .active-toggle {
+  cursor: not-allowed;
+}
+
+.email-preferences-panel {
+  max-width: 560px;
+}
+
+.email-preferences-actions {
+  margin-top: 16px;
+}
+
+.email-preferences-footer {
+  margin-top: 24px;
+}
+
 .section-header {
   display: flex;
   justify-content: space-between;

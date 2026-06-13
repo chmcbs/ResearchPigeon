@@ -22,6 +22,7 @@ from api.schemas import (
     UpdateProfileRequest,
     UpdateDigestSelectionRequest,
     ReorderProfilesRequest,
+    UpdateEmailSettingsRequest,
 )
 from api.services.auth import (
     request_magic_link_payload as request_magic_link_payload_service,
@@ -55,6 +56,10 @@ from api.services.profiles import (
     reorder_profiles_payload as reorder_profiles_payload_service,
 )
 from api.services.debug_digest_reset import reset_papers_and_runs, reset_user_profiles
+from api.services.email_settings import (
+    get_email_settings_payload as get_email_settings_payload_service,
+    update_email_settings_payload as update_email_settings_payload_service,
+)
 from api.unit_of_work import ApiUnitOfWork, open_api_unit_of_work
 from core.auth import (
     create_magic_link,
@@ -77,6 +82,14 @@ from core.cron import run_daily_digest_for_all_users
 from core.pipeline_progress import get_progress, set_step, track_pipeline
 from core.db import get_database_url
 from core.email import EmailDeliveryError, send_magic_link_email
+from core.email_settings import (
+    ensure_email_settings,
+    get_digest_subscribed,
+    get_email_settings,
+    resubscribe_by_token,
+    set_digest_subscribed,
+    unsubscribe_by_token,
+)
 from core.rate_limit import RateLimitExceeded, check_rate_limit
 from core.security import can_use_debug_features, verify_internal_cron_token
 from core.paper_history import dismiss_paper
@@ -485,6 +498,11 @@ def _fetch_profiles_for_user(user_id: str, conn=None):
     )
 
 
+def _require_digest_profile_changes_allowed(user_id: str, conn) -> None:
+    if not get_digest_subscribed(user_id, conn=conn):
+        raise ValueError("digest emails are turned off")
+
+
 def create_profile_payload(
     request: CreateProfileRequest,
     user_id: str,
@@ -493,6 +511,7 @@ def create_profile_payload(
 ) -> dict:
     try:
         with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            ensure_email_settings(user_id, conn=active_uow.conn)
             return create_profile_payload_service(
                 request=request,
                 user_id=user_id,
@@ -521,6 +540,11 @@ def update_profile_payload(
 ) -> dict:
     try:
         with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            if request.digest_enabled is not None:
+                _require_digest_profile_changes_allowed(
+                    user_id,
+                    active_uow.conn,
+                )
             return update_profile_payload_service(
                 profile_id=profile_id,
                 request=request,
@@ -580,6 +604,7 @@ def update_digest_selection_payload(
 ) -> dict:
     try:
         with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            _require_digest_profile_changes_allowed(user_id, active_uow.conn)
             return update_digest_selection_payload_service(
                 request=request,
                 user_id=user_id,
@@ -590,6 +615,69 @@ def update_digest_selection_payload(
             )
     except ValueError as error:
         raise _to_http_exception(error) from error
+
+
+########################################
+########### EMAIL SETTINGS #############
+########################################
+
+def get_email_settings_payload(
+    user_id: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    try:
+        with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            return get_email_settings_payload_service(
+                user_id=user_id,
+                get_email_settings=lambda uid: get_email_settings(
+                    uid,
+                    conn=active_uow.conn,
+                ),
+            )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+def update_email_settings_payload(
+    request: UpdateEmailSettingsRequest,
+    user_id: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    try:
+        with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            return update_email_settings_payload_service(
+                request=request,
+                user_id=user_id,
+                set_digest_subscribed=lambda uid, digest_subscribed: set_digest_subscribed(
+                    uid,
+                    digest_subscribed=digest_subscribed,
+                    conn=active_uow.conn,
+                ),
+            )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
+def unsubscribe_by_token_payload(
+    token: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+        user_id = unsubscribe_by_token(token, conn=active_uow.conn)
+    return {"user_id": user_id}
+
+
+def resubscribe_by_token_payload(
+    token: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+        user_id = resubscribe_by_token(token, conn=active_uow.conn)
+    return {"user_id": user_id}
 
 
 def reorder_profiles_payload(

@@ -170,6 +170,15 @@ def is_database_rate_limit_enabled() -> bool:
 
 
 # Emails
+def get_email_unsubscribe_secret() -> str:
+    secret = os.getenv("EMAIL_UNSUBSCRIBE_SECRET", "").strip()
+    if secret:
+        return secret
+    if is_production():
+        raise ValueError("EMAIL_UNSUBSCRIBE_SECRET must be set in production")
+    return "dev-email-unsubscribe-secret"
+
+
 def get_smtp_host() -> str:
     return os.getenv("SMTP_HOST", "").strip()
 

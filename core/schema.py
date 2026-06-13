@@ -218,6 +218,18 @@ ON auth_sessions (user_id, created_at DESC);
 """
 
 
+CREATE_USER_EMAIL_SETTINGS_TABLE = """
+CREATE TABLE IF NOT EXISTS user_email_settings (
+    user_id TEXT PRIMARY KEY,
+    digest_subscribed BOOLEAN NOT NULL DEFAULT TRUE,
+    unsubscribed_at TIMESTAMPTZ,
+    unsubscribe_token_hash TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
+
 ########################################
 ########### RECOMMENDATIONS ############
 ########################################
@@ -320,6 +332,7 @@ def main():
             cur.execute(CREATE_MAGIC_LINK_TOKENS_TABLE)
             cur.execute(CREATE_AUTH_SESSIONS_TABLE)
             cur.execute(CREATE_AUTH_SESSIONS_USER_INDEX)
+            cur.execute(CREATE_USER_EMAIL_SETTINGS_TABLE)
             cur.execute(CREATE_PAPER_FEEDBACK_TABLE)
             cur.execute(CREATE_PAPER_FEEDBACK_PROFILE_PAPER_INDEX)
             cur.execute(CREATE_PROFILE_DISMISSED_PAPERS_TABLE)

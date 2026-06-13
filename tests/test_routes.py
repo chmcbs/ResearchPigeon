@@ -318,3 +318,54 @@ def test_magic_link_verify_supports_safe_next_redirect(monkeypatch):
 
     assert response.status_code == 302
     assert response.headers["location"] == "/digest"
+
+
+def test_email_unsubscribe_redirects_to_preferences(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "unsubscribe_by_token_payload",
+        Mock(return_value={"user_id": "reader@example.com"}),
+    )
+    client = TestClient(routes.app)
+    response = client.get(
+        "/email/unsubscribe?token=abc123",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/email/preferences?status=unsubscribed&token=abc123"
+
+
+def test_email_unsubscribe_invalid_token_redirects_to_error_state(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "unsubscribe_by_token_payload",
+        Mock(return_value={"user_id": None}),
+    )
+    client = TestClient(routes.app)
+    response = client.get(
+        "/email/unsubscribe?token=bad",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/email/preferences?status=invalid"
+
+
+def test_email_settings_get_route_returns_payload(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "get_email_settings_payload",
+        Mock(
+            return_value={
+                "user_id": "default",
+                "digest_subscribed": True,
+                "unsubscribed_at": None,
+            }
+        ),
+    )
+    client = TestClient(routes.app)
+    response = client.get("/api/email-settings")
+
+    assert response.status_code == 200
+    assert response.json()["digest_subscribed"] is True

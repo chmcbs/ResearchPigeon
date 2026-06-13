@@ -65,3 +65,8 @@ def validate_runtime_config() -> None:
             "INTERNAL_CRON_TOKEN must be set to a random string of at least 32 "
             "characters when APP_ENV is production"
         )
+
+    if not os.getenv("EMAIL_UNSUBSCRIBE_SECRET", "").strip():
+        raise StartupConfigError(
+            "EMAIL_UNSUBSCRIBE_SECRET must be set when APP_ENV is production"
+        )

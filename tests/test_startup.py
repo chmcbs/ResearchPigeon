@@ -19,6 +19,7 @@ def _set_valid_production_env(monkeypatch) -> None:
     monkeypatch.setenv("INTERNAL_CRON_TOKEN", "x" * 32)
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("EMAIL_FROM", "noreply@example.com")
+    monkeypatch.setenv("EMAIL_UNSUBSCRIBE_SECRET", "y" * 32)
 
 
 def test_validate_runtime_config_allows_development_defaults(monkeypatch):
@@ -49,6 +50,16 @@ def test_validate_runtime_config_requires_email_delivery_in_production(monkeypat
     monkeypatch.delenv("SMTP_HOST", raising=False)
 
     with pytest.raises(StartupConfigError, match="SMTP_HOST and EMAIL_FROM"):
+        validate_runtime_config()
+
+
+def test_validate_runtime_config_requires_email_unsubscribe_secret_in_production(
+    monkeypatch,
+):
+    _set_valid_production_env(monkeypatch)
+    monkeypatch.delenv("EMAIL_UNSUBSCRIBE_SECRET", raising=False)
+
+    with pytest.raises(StartupConfigError, match="EMAIL_UNSUBSCRIBE_SECRET"):
         validate_runtime_config()
 
 

@@ -16,10 +16,12 @@ from core.profiles import list_digest_categories, list_digest_selected_profile_i
 logger = get_logger(__name__)
 
 LIST_DIGEST_USER_IDS_SQL = """
-SELECT DISTINCT user_id
-FROM user_profiles
-WHERE digest_enabled = TRUE
-ORDER BY user_id ASC;
+SELECT DISTINCT up.user_id
+FROM user_profiles up
+LEFT JOIN user_email_settings ues ON ues.user_id = up.user_id
+WHERE up.digest_enabled = TRUE
+  AND COALESCE(ues.digest_subscribed, TRUE) = TRUE
+ORDER BY up.user_id ASC;
 """
 
 

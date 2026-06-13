@@ -102,7 +102,8 @@ def test_build_digest_email_body_includes_picks_stars_category_and_footer(monkey
     assert "% match" not in body
     assert "https://arxiv.org/pdf/2601.00001" in body
     assert "Rate papers: http://localhost:8000/papers" in body
-    assert "Manage profiles: http://localhost:8000/profiles" in body
+    assert "Manage preferences: http://localhost:8000/profiles" in body
+    assert "Unsubscribe: http://localhost:8000/email/unsubscribe" in body
     assert "Not affiliated with arXiv" in body
 
 
@@ -132,8 +133,9 @@ def test_build_digest_email_html_matches_preview_layout(monkeypatch):
     assert 'href="http://localhost:8000/papers"' in html
     assert "Rate papers" in html
     assert 'href="http://localhost:8000/profiles"' in html
-    assert "Manage profiles" in html
-    assert html.index("Rate papers") < html.index("Manage profiles")
+    assert "Manage preferences" in html
+    assert "Unsubscribe from digest emails" in html
+    assert html.index("Rate papers") < html.index("Manage preferences")
     assert "text-align:center" in html
     assert 'align="center"' in html
     assert "<h1" in html
@@ -241,6 +243,11 @@ def test_deliver_digest_email_for_user_sends_when_picks_exist(monkeypatch):
         "core.digest_email.build_digest_sections",
         Mock(return_value=sections),
     )
+    monkeypatch.setattr("core.digest_email.ensure_email_settings", Mock())
+    monkeypatch.setattr(
+        "core.digest_email.build_unsubscribe_url",
+        Mock(return_value="http://localhost:8000/email/unsubscribe?token=abc"),
+    )
     send = Mock()
     monkeypatch.setattr("core.digest_email.send_digest_email", send)
 
@@ -277,6 +284,11 @@ def test_deliver_digest_email_for_user_logs_failure_without_raising(monkeypatch)
     monkeypatch.setattr(
         "core.digest_email.build_digest_sections",
         Mock(return_value=sections),
+    )
+    monkeypatch.setattr("core.digest_email.ensure_email_settings", Mock())
+    monkeypatch.setattr(
+        "core.digest_email.build_unsubscribe_url",
+        Mock(return_value="http://localhost:8000/email/unsubscribe?token=abc"),
     )
     monkeypatch.setattr(
         "core.digest_email.send_digest_email",
