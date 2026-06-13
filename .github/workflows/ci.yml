@@ -68,6 +68,7 @@ jobs:
           INTERNAL_CRON_TOKEN=test-cron-token-thirty-two-characters-long \
           SMTP_HOST=smtp.example.com \
           EMAIL_FROM=noreply@example.com \
+          EMAIL_UNSUBSCRIBE_SECRET=test-unsubscribe-secret-thirty-two-chars \
           ALLOW_DEV_MAGIC_LINK_RESPONSE=0 \
           python -c "from core.startup import validate_runtime_config; validate_runtime_config()"
 
