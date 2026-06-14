@@ -3,7 +3,6 @@ Runs the end-to-end recommendation pipeline
 """
 
 from core.config import (
-    DEFAULT_USER_ID,
     get_embedding_limit,
     get_ingestion_max_results,
 )
@@ -218,7 +217,7 @@ def run_recommendations_for_profiles(
 
 
 def run_pipeline(
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     profile_ids: list[str] | None = None,
     max_results: int | None = None,
@@ -289,4 +288,6 @@ def run_pipeline(
 
 
 if __name__ == "__main__":
-    run_pipeline()
+    raise SystemExit(
+        "Usage: import and call run_pipeline(user_id=..., profile_id=... or profile_ids=[...])"
+    )

@@ -268,17 +268,3 @@ class DebugProfileDataResetResponse(BaseModel):
     deleted_profiles: int
 
 
-class CronDailyDigestUserResult(BaseModel):
-    user_id: str
-    status: Literal["succeeded", "failed", "skipped"]
-    profile_ids: list[str]
-    run_ids: list[str] = Field(default_factory=list)
-    error_message: str | None = None
-
-
-class CronDailyDigestResponse(BaseModel):
-    users_seen: int
-    users_succeeded: int
-    users_failed: int
-    users_skipped: int
-    results: list[CronDailyDigestUserResult]

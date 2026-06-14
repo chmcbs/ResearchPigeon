@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import psycopg
 
-from core.config import DEFAULT_INTEREST_TEXT, DEFAULT_USER_ID, get_arxiv_categories
+from core.config import DEFAULT_INTEREST_TEXT, get_arxiv_categories
 from core.db import connection_scope
 from core.keyword_search import MAX_KEYWORDS_PER_PROFILE, normalize_keyword
 
@@ -213,7 +213,7 @@ def _pick_next_available_slot(occupied_slots: set[int]) -> int:
 
 
 def create_profile(
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     category: str | None = None,
     interest_sentence: str = DEFAULT_INTEREST_TEXT,
     profile_name: str | None = None,
@@ -271,7 +271,7 @@ def get_profile(profile_id: str, conn=None) -> ProfileRow | None:
 
 
 def require_profile_id(
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     conn=None,
 ) -> str:
@@ -289,7 +289,7 @@ def require_profile_id(
 
 def list_profile_keywords(
     profile_id: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     conn=None,
 ) -> list[str]:
     with connection_scope(conn) as active_conn:
@@ -307,7 +307,7 @@ def list_profile_keywords(
 def add_profile_keyword(
     profile_id: str,
     keyword: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     conn=None,
 ) -> list[str]:
     normalized_keyword = normalize_keyword(keyword)
@@ -337,7 +337,7 @@ def add_profile_keyword(
 def remove_profile_keyword(
     profile_id: str,
     keyword: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     conn=None,
 ) -> list[str]:
     normalized_keyword = normalize_keyword(keyword)
@@ -379,9 +379,7 @@ def categories_for_profile_ids(
     return list(dict.fromkeys(categories))
 
 
-def list_digest_selected_profile_ids(
-    user_id: str = DEFAULT_USER_ID, conn=None
-) -> list[str]:
+def list_digest_selected_profile_ids(user_id: str, conn=None) -> list[str]:
     with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(LIST_DIGEST_SELECTED_SQL, (user_id,))
@@ -392,7 +390,7 @@ def list_digest_selected_profile_ids(
 
 def set_digest_profile_selection(
     profile_ids: list[str],
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     conn=None,
 ) -> list[str]:
     requested_profile_ids = list(dict.fromkeys(profile_ids))
@@ -422,7 +420,7 @@ def set_digest_profile_selection(
 
 def reorder_profiles(
     profile_ids: list[str],
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     conn=None,
 ) -> list[str]:
     ordered_profile_ids = list(dict.fromkeys(profile_ids))
@@ -456,7 +454,7 @@ def reorder_profiles(
 
 def update_profile(
     profile_id: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_name: str | None = None,
     category: str | None = None,
     digest_enabled: bool | None = None,
@@ -501,7 +499,7 @@ def update_profile(
 
 def delete_profile(
     profile_id: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     conn=None,
 ) -> bool:
     with connection_scope(conn) as active_conn:

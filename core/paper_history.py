@@ -2,7 +2,6 @@
 Permanent paper dismissal for a profile
 """
 
-from core.config import DEFAULT_USER_ID
 from core.db import connection_scope
 from core.preferences import remove_feedback, update_preference_embedding
 from core.profiles import require_profile_id
@@ -22,7 +21,7 @@ ON CONFLICT (profile_id, arxiv_id) DO NOTHING;
 
 def dismiss_paper(
     arxiv_id: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     conn=None,
 ) -> dict:

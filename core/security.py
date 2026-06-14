@@ -1,12 +1,11 @@
 """
-Shared security helpers for redirects, CSRF, and internal service authentication
+Shared security helpers for redirects and CSRF
 """
 
 import secrets
 
 from core.config import (
     get_debug_admin_emails,
-    get_internal_cron_token,
     is_app_https,
     is_csrf_disabled,
     is_debug_features_enabled,
@@ -79,12 +78,3 @@ def can_use_debug_features(email: str | None) -> bool:
     if not is_debug_features_enabled():
         return False
     return is_debug_admin_email(email)
-
-
-def verify_internal_cron_token(provided_token: str | None) -> bool:
-    expected = get_internal_cron_token()
-    if expected is None:
-        return False
-    if not provided_token:
-        return False
-    return secrets.compare_digest(provided_token, expected)

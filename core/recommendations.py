@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import psycopg
 
-from core.config import DEFAULT_USER_ID, get_daily_picks_k, get_keyword_boost_cap
+from core.config import get_daily_picks_k, get_keyword_boost_cap
 from core.db import get_database_url
 from core.profiles import require_profile_id
 from core.recommendations_sql import (
@@ -59,7 +59,7 @@ def _ensure_completed_run(cur, run_id: str) -> tuple[str, str, int]:
 # Rank papers for a completed run and persist as recommendations
 def generate_recommendations(
     run_id: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     k_override: int | None = None,
 ) -> list[dict]:
@@ -143,12 +143,16 @@ if __name__ == "__main__":
 
     if len(sys.argv) < 3:
         raise SystemExit(
-            "Usage: python -m core.recommendations <run_id> <profile_id> [user_id]"
+            "Usage: python -m core.recommendations <run_id> <profile_id> <user_id>"
         )
 
     cli_run_id = sys.argv[1]
     cli_profile_id = sys.argv[2]
-    cli_user_id = sys.argv[3] if len(sys.argv) > 3 else DEFAULT_USER_ID
+    if len(sys.argv) < 4:
+        raise SystemExit(
+            "Usage: python -m core.recommendations <run_id> <profile_id> <user_id>"
+        )
+    cli_user_id = sys.argv[3]
     generated = generate_recommendations(
         cli_run_id,
         user_id=cli_user_id,

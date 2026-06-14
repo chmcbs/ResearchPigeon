@@ -5,6 +5,7 @@ SQL queries for daily pick retrieval and profile resolution
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
+from core.recommendation_query_fragments import LATEST_RUN_FOR_PROFILE_AND_RUNS_CTE
 
 LATEST_DAILY_PICKS_SQL = """
 WITH latest_run AS (
@@ -42,18 +43,9 @@ JOIN runs r ON r.run_id = rec.run_id
 ORDER BY rec.rank ASC;
 """
 
-LATEST_DAILY_PICKS_FOR_RUNS_SQL = """
-WITH latest_run AS (
-    SELECT
-        run_id,
-        MAX(generated_at) AS generated_at
-    FROM recommendations
-    WHERE profile_id = %s
-      AND run_id::text = ANY(%s)
-    GROUP BY run_id
-    ORDER BY MAX(generated_at) DESC
-    LIMIT 1
-)
+LATEST_DAILY_PICKS_FOR_RUNS_SQL = (
+    LATEST_RUN_FOR_PROFILE_AND_RUNS_CTE
+    + """
 SELECT
     rec.rank,
     p.arxiv_id,
@@ -78,6 +70,7 @@ LEFT JOIN descriptions d ON d.arxiv_id = p.arxiv_id
 JOIN runs r ON r.run_id = rec.run_id
 ORDER BY rec.rank ASC;
 """
+)
 
 RESOLVE_PROFILE_SQL = """
 SELECT profile_id::text, user_id, profile_slot, profile_name, category, interest_sentence, created_at

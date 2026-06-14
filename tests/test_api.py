@@ -4,6 +4,7 @@ Tests FastAPI service helpers
 
 from contextlib import contextmanager
 from datetime import datetime, timezone
+from types import SimpleNamespace
 from unittest.mock import Mock
 
 import pytest
@@ -16,6 +17,7 @@ from api.schemas import (
     FeedbackRequest,
     TestGenerationRequest,
     ManageProfileKeywordRequest,
+    UpdateProfileRequest,
     UpdateDigestSelectionRequest,
 )
 from api.services.test_generation import (
@@ -29,6 +31,7 @@ from api.services.metrics import get_metrics_payload
 from api.services.profiles import (
     add_profile_keyword_payload,
     remove_profile_keyword_payload,
+    update_profile_payload,
     update_digest_selection_payload,
 )
 
@@ -508,6 +511,50 @@ def test_update_digest_selection_payload_maps_response():
         "user_id": "default",
         "selected_profile_ids": ["profile-2", "profile-3"],
     }
+
+
+def test_update_profile_payload_returns_reloaded_summary_shape():
+    update_profile = Mock()
+    fetch_profiles_for_user = Mock(
+        return_value=[
+            SimpleNamespace(
+                profile_id="profile-1",
+                user_id="default",
+                profile_slot=1,
+                profile_name="Updated Profile",
+                category="cs.AI",
+                interest_sentence="Efficient LLM systems",
+                digest_enabled=True,
+                created_at="2026-01-01T00:00:00+00:00",
+                preference_updated_at="2026-01-02T00:00:00+00:00",
+                keywords=["encoder transformers"],
+            )
+        ]
+    )
+
+    payload = update_profile_payload(
+        profile_id="profile-1",
+        request=UpdateProfileRequest(
+            profile_name="Updated Profile",
+            category="cs.AI",
+            digest_enabled=True,
+        ),
+        user_id="default",
+        update_profile=update_profile,
+        fetch_profiles_for_user=fetch_profiles_for_user,
+    )
+
+    update_profile.assert_called_once_with(
+        profile_id="profile-1",
+        user_id="default",
+        profile_name="Updated Profile",
+        category="cs.AI",
+        digest_enabled=True,
+    )
+    fetch_profiles_for_user.assert_called_once_with("default")
+    assert payload["profile"]["profile_id"] == "profile-1"
+    assert payload["profile"]["keywords"] == ["encoder transformers"]
+    assert payload["profile"]["preference_updated_at"] == "2026-01-02T00:00:00+00:00"
 
 
 def test_get_metrics_payload_returns_run_and_recommendation_counts():

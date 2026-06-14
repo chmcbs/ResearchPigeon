@@ -116,3 +116,89 @@ def test_run_daily_digest_for_all_users_marks_users_failed_when_shared_steps_fai
     assert payload["users_succeeded"] == 0
     run_recommendations.assert_not_called()
     assert payload["results"][0]["error_message"] == "ingestion failed"
+
+
+def test_run_daily_digest_for_all_users_alerts_admin_when_blurb_batch_fails(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(
+        cron,
+        "run_shared_pipeline_steps",
+        Mock(return_value={"run_ids": ["run-shared"], "embedded_count": 3}),
+    )
+    monkeypatch.setattr(cron, "run_recommendations_for_profiles", Mock())
+    monkeypatch.setattr(
+        cron,
+        "run_description_batch_for_recommendations",
+        Mock(side_effect=RuntimeError("llm unavailable")),
+    )
+    deliver_user_email = Mock(return_value={"status": "sent", "error_message": None})
+    monkeypatch.setattr(cron, "deliver_digest_email_for_user", deliver_user_email)
+    monkeypatch.setattr(cron, "get_debug_admin_emails", lambda: frozenset({"admin@example.com"}))
+    monkeypatch.setattr(cron, "is_email_delivery_configured", lambda: True)
+    monkeypatch.setattr(cron, "get_product_name", lambda: "Paper Radar")
+    monkeypatch.setattr(cron, "get_email_from", lambda: "noreply@example.com")
+    send_admin_alert = Mock()
+    monkeypatch.setattr(cron, "deliver_email_message", send_admin_alert)
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["users_succeeded"] == 1
+    assert payload["description_batch"] == {}
+    deliver_user_email.assert_called_once()
+    send_admin_alert.assert_called_once()
+    message = send_admin_alert.call_args.args[0]
+    assert message["To"] == "admin@example.com"
+    assert "LLM blurb batch failed" in message["Subject"]
+    assert "User digests continued to send without descriptions." in message.get_content()
+
+
+def test_run_daily_digest_for_all_users_skips_alert_when_no_admin_recipients(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(
+        cron,
+        "run_shared_pipeline_steps",
+        Mock(return_value={"run_ids": ["run-shared"], "embedded_count": 3}),
+    )
+    monkeypatch.setattr(cron, "run_recommendations_for_profiles", Mock())
+    monkeypatch.setattr(
+        cron,
+        "run_description_batch_for_recommendations",
+        Mock(side_effect=RuntimeError("llm unavailable")),
+    )
+    monkeypatch.setattr(
+        cron,
+        "deliver_digest_email_for_user",
+        Mock(return_value={"status": "sent", "error_message": None}),
+    )
+    monkeypatch.setattr(cron, "get_debug_admin_emails", lambda: frozenset())
+    send_admin_alert = Mock()
+    monkeypatch.setattr(cron, "deliver_email_message", send_admin_alert)
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["users_succeeded"] == 1
+    send_admin_alert.assert_not_called()

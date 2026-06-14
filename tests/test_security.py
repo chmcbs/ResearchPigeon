@@ -412,22 +412,10 @@ def test_test_generation_run_is_rate_limited_per_user(monkeypatch, fake_api_uow)
     assert exc.value.status_code == 429
 
 
-def test_internal_cron_requires_bearer_token(monkeypatch):
-    monkeypatch.setattr(
-        routes,
-        "run_daily_digest_cron_payload",
-        Mock(return_value={"users_seen": 0, "users_succeeded": 0, "users_failed": 0, "users_skipped": 0, "results": []}),
-    )
+def test_internal_cron_endpoint_is_not_exposed():
     client = TestClient(routes.app)
-
-    denied = client.post("/internal/cron/daily-digest")
-    allowed = client.post(
-        "/internal/cron/daily-digest",
-        headers={"Authorization": "Bearer test-cron-token"},
-    )
-
-    assert denied.status_code == 401
-    assert allowed.status_code == 200
+    response = client.post("/internal/cron/daily-digest")
+    assert response.status_code == 404
 
 
 def test_debug_reset_requires_admin_email(monkeypatch):

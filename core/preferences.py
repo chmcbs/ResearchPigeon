@@ -7,7 +7,6 @@ from dataclasses import dataclass
 
 import psycopg
 
-from core.config import DEFAULT_USER_ID
 from core.db import connection_scope
 from core.embeddings import embed_texts
 from core.profiles import require_profile_id
@@ -103,7 +102,7 @@ def coerce_vector(raw_vector) -> list[float]:
 # Cold start preference embedding
 def initialize_preference_embedding(
     interest_text: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     conn=None,
 ) -> str:
@@ -129,7 +128,7 @@ def initialize_preference_embedding(
 def save_feedback(
     arxiv_id: str,
     label: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     conn=None,
 ) -> str:
@@ -153,7 +152,7 @@ def save_feedback(
 
 def remove_feedback(
     arxiv_id: str,
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     conn=None,
 ) -> bool:
@@ -229,7 +228,7 @@ def compute_preference_vector(
 
 
 def update_preference_embedding(
-    user_id: str = DEFAULT_USER_ID,
+    user_id: str,
     profile_id: str | None = None,
     conn=None,
 ) -> None:

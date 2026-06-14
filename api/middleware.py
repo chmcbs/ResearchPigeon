@@ -15,7 +15,6 @@ CSRF_EXEMPT_PATHS = frozenset(
     {
         "/auth/magic-link/request",
         "/auth/magic-link/verify",
-        "/internal/cron/daily-digest",
     }
 )
 

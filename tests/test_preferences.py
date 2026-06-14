@@ -83,7 +83,12 @@ def test_compute_preference_vector_requires_liked_vector():
 
 def test_save_feedback_rejects_invalid_label():
     with pytest.raises(ValueError, match="label must be 'like' or 'dislike'"):
-        preferences.save_feedback("2401.12345", "maybe", profile_id="profile-1")
+        preferences.save_feedback(
+            "2401.12345",
+            "maybe",
+            user_id="default",
+            profile_id="profile-1",
+        )
 
 
 def test_save_feedback_upserts_database_row(monkeypatch):

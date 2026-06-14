@@ -16,7 +16,6 @@ def _set_valid_production_env(monkeypatch) -> None:
     monkeypatch.delenv("DISABLE_CSRF", raising=False)
     monkeypatch.delenv("DISABLE_RATE_LIMIT", raising=False)
     monkeypatch.delenv("ALLOW_DEV_MAGIC_LINK_RESPONSE", raising=False)
-    monkeypatch.setenv("INTERNAL_CRON_TOKEN", "x" * 32)
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("EMAIL_FROM", "noreply@example.com")
     monkeypatch.setenv("EMAIL_UNSUBSCRIBE_SECRET", "y" * 32)
@@ -34,14 +33,6 @@ def test_validate_runtime_config_rejects_disabled_csrf_in_production(monkeypatch
     monkeypatch.setenv("DISABLE_CSRF", "1")
 
     with pytest.raises(StartupConfigError, match="DISABLE_CSRF"):
-        validate_runtime_config()
-
-
-def test_validate_runtime_config_requires_strong_cron_token_in_production(monkeypatch):
-    _set_valid_production_env(monkeypatch)
-    monkeypatch.setenv("INTERNAL_CRON_TOKEN", "short")
-
-    with pytest.raises(StartupConfigError, match="INTERNAL_CRON_TOKEN"):
         validate_runtime_config()
 
 

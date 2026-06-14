@@ -12,7 +12,6 @@ def _authenticated_test_session(monkeypatch) -> None:
     monkeypatch.setenv("ALLOW_DEV_MAGIC_LINK_RESPONSE", "1")
     monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
     monkeypatch.setenv("DEBUG_ADMIN_EMAILS", "test@example.com")
-    monkeypatch.setenv("INTERNAL_CRON_TOKEN", "test-cron-token")
     monkeypatch.setenv("LLM_PROVIDER", "mock")
     monkeypatch.setattr(
         "api.dependencies.get_auth_session_payload",

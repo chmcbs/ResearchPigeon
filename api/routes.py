@@ -32,8 +32,6 @@ from api.dependencies import (
     delete_paper_payload,
     require_authenticated_user_id,
     require_debug_admin,
-    require_internal_cron_token,
-    run_daily_digest_cron_payload,
     save_feedback_payload,
     unsubscribe_by_token_payload,
     update_digest_selection_payload,
@@ -48,7 +46,6 @@ from api.schemas import (
     AuthSessionResponse,
     CreateProfileRequest,
     CreateProfileResponse,
-    CronDailyDigestResponse,
     TestGenerationDebugResponse,
     TestGenerationProgressResponse,
     TestGenerationRequest,
@@ -507,11 +504,3 @@ def metrics(request: Request, latest_runs_limit: int = 10) -> dict:
     return get_metrics_payload(latest_runs_limit=latest_runs_limit)
 
 
-########################################
-############# INTERNAL CRON ############
-########################################
-
-@app.post("/internal/cron/daily-digest", response_model=CronDailyDigestResponse)
-def internal_cron_daily_digest(request: Request) -> dict:
-    require_internal_cron_token(request)
-    return run_daily_digest_cron_payload()

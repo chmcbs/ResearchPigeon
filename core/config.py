@@ -15,7 +15,6 @@ _CATEGORY_LABELS_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "arxiv_category_labels.json"
 )
 
-DEFAULT_USER_ID = os.getenv("DEFAULT_USER_ID", "default")
 DEFAULT_DAILY_K = int(os.getenv("DAILY_PICKS_K", "3"))
 DEFAULT_INTEREST_TEXT = os.getenv(
     "DEFAULT_INTEREST_TEXT",
@@ -115,11 +114,6 @@ def is_rate_limit_disabled() -> bool:
 
 def is_dev_magic_link_response_enabled() -> bool:
     return _env_flag_enabled("ALLOW_DEV_MAGIC_LINK_RESPONSE")
-
-
-def get_internal_cron_token() -> str | None:
-    token = os.getenv("INTERNAL_CRON_TOKEN", "").strip()
-    return token or None
 
 
 def is_trust_proxy_headers_enabled() -> bool:

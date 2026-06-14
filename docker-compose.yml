@@ -48,7 +48,6 @@ services:
       - "8000:8000"
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/arxiv
-      INTERNAL_CRON_TOKEN: ${INTERNAL_CRON_TOKEN:?INTERNAL_CRON_TOKEN is required}
       DEBUG_ADMIN_EMAILS: ${DEBUG_ADMIN_EMAILS:-}
       ALLOW_DEV_MAGIC_LINK_RESPONSE: ${ALLOW_DEV_MAGIC_LINK_RESPONSE:-1}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
@@ -91,14 +90,29 @@ services:
     entrypoint: ["/worker-entrypoint.sh"]
     environment:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/arxiv
-      APP_BASE_URL: http://api:8000
-      INTERNAL_CRON_TOKEN: ${INTERNAL_CRON_TOKEN}
+      DEBUG_ADMIN_EMAILS: ${DEBUG_ADMIN_EMAILS:-}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
+      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
+      LLM_MODEL: ${LLM_MODEL:-llama3.2:3b}
+      LLM_BATCH_CONCURRENCY: ${LLM_BATCH_CONCURRENCY:-1}
+      LLM_BATCH_TIMEOUT_S: ${LLM_BATCH_TIMEOUT_S:-600}
+      LLM_REQUEST_TIMEOUT_S: ${LLM_REQUEST_TIMEOUT_S:-120}
+      SMTP_HOST: ${SMTP_HOST:-mailpit}
+      SMTP_PORT: ${SMTP_PORT:-1025}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_USE_SSL: ${SMTP_USE_SSL:-}
+      SMTP_USE_STARTTLS: ${SMTP_USE_STARTTLS:-}
+      EMAIL_FROM: ${EMAIL_FROM:-noreply@localhost}
       CRON_INTERVAL_SECONDS: ${CRON_INTERVAL_SECONDS:-86400}
     depends_on:
       db:
         condition: service_healthy
-      api:
-        condition: service_healthy
+      ollama:
+        condition: service_started
+      mailpit:
+        condition: service_started
 
 volumes:
   postgres_data:

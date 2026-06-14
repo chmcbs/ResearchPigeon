@@ -65,7 +65,6 @@ jobs:
           APP_ENV=production \
           DATABASE_URL=postgresql://postgres:postgres@db:5432/arxiv \
           APP_BASE_URL=https://app.example.com \
-          INTERNAL_CRON_TOKEN=test-cron-token-thirty-two-characters-long \
           SMTP_HOST=smtp.example.com \
           EMAIL_FROM=noreply@example.com \
           EMAIL_UNSUBSCRIBE_SECRET=test-unsubscribe-secret-thirty-two-chars \
@@ -74,7 +73,6 @@ jobs:
 
       - name: Validate Docker Compose configuration
         env:
-          INTERNAL_CRON_TOKEN: test-cron-token-thirty-two-characters-long
           APP_BASE_URL: https://app.example.com
           SMTP_HOST: smtp.example.com
           EMAIL_FROM: noreply@example.com

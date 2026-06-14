@@ -1,7 +1,7 @@
 # Production overrides. Usage:
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
 #
-# Required host env vars: APP_BASE_URL, INTERNAL_CRON_TOKEN, SMTP_HOST, EMAIL_FROM
+# Required host env vars: APP_BASE_URL, SMTP_HOST, EMAIL_FROM
 # Optional: POSTGRES_PASSWORD (defaults to postgres for single-node compose)
 services:
   db:
@@ -14,7 +14,6 @@ services:
       APP_ENV: production
       APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/arxiv
-      INTERNAL_CRON_TOKEN: ${INTERNAL_CRON_TOKEN:?INTERNAL_CRON_TOKEN is required}
       ALLOW_DEV_MAGIC_LINK_RESPONSE: "0"
       SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -33,4 +32,3 @@ services:
       APP_ENV: production
       DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/arxiv
       APP_BASE_URL: http://api:8000
-      INTERNAL_CRON_TOKEN: ${INTERNAL_CRON_TOKEN:?INTERNAL_CRON_TOKEN is required}

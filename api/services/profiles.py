@@ -128,15 +128,23 @@ def update_profile_payload(
     request,
     user_id: str,
     update_profile: Callable[..., object],
+    fetch_profiles_for_user: Callable[[str], list],
 ) -> dict:
-    profile = update_profile(
+    update_profile(
         profile_id=profile_id,
         user_id=user_id,
         profile_name=request.profile_name,
         category=request.category,
         digest_enabled=request.digest_enabled,
     )
-    return {"profile": to_profile_summary(profile)}
+    profiles = fetch_profiles_for_user(user_id)
+    updated_profile = next(
+        (profile for profile in profiles if str(profile.profile_id) == profile_id),
+        None,
+    )
+    if updated_profile is None:
+        raise ValueError("updated profile was not found")
+    return {"profile": to_profile_summary(updated_profile)}
 
 
 def delete_profile_payload(

@@ -7,19 +7,11 @@ from dataclasses import dataclass
 from core.arxiv_text import format_arxiv_display_text
 from core.db import connection_scope
 from core.profiles import get_profile
+from core.recommendation_query_fragments import LATEST_RUN_FOR_PROFILE_AND_RUNS_CTE
 
-LATEST_PICKS_FOR_RUNS_SQL = """
-WITH latest_run AS (
-    SELECT
-        run_id,
-        MAX(generated_at) AS generated_at
-    FROM recommendations
-    WHERE profile_id = %s
-      AND run_id::text = ANY(%s)
-    GROUP BY run_id
-    ORDER BY MAX(generated_at) DESC
-    LIMIT 1
-)
+LATEST_PICKS_FOR_RUNS_SQL = (
+    LATEST_RUN_FOR_PROFILE_AND_RUNS_CTE
+    + """
 SELECT
     rec.rank,
     p.arxiv_id,
@@ -35,6 +27,7 @@ JOIN papers p ON p.arxiv_id = rec.arxiv_id
 LEFT JOIN descriptions d ON d.arxiv_id = p.arxiv_id
 ORDER BY rec.rank ASC;
 """
+)
 
 
 @dataclass(frozen=True)

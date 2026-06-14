@@ -78,7 +78,6 @@ from core.config import (
     is_dev_magic_link_response_enabled,
     is_trust_proxy_headers_enabled,
 )
-from core.cron import run_daily_digest_for_all_users
 from core.pipeline_progress import get_progress, set_step, track_pipeline
 from core.db import get_database_url
 from core.email import EmailDeliveryError, send_magic_link_email
@@ -90,7 +89,7 @@ from core.email_settings import (
     unsubscribe_by_token,
 )
 from core.rate_limit import RateLimitExceeded, check_rate_limit
-from core.security import can_use_debug_features, verify_internal_cron_token
+from core.security import can_use_debug_features
 from core.paper_history import dismiss_paper
 from core.preferences import (
     initialize_preference_embedding,
@@ -125,17 +124,6 @@ def _to_http_exception(error: Exception) -> HTTPException:
     if isinstance(error, psycopg.Error):
         return HTTPException(status_code=500, detail="Database error")
     return HTTPException(status_code=400, detail=str(error))
-
-
-def require_internal_cron_token(request: Request) -> None:
-    auth_header = request.headers.get("Authorization", "")
-    token = (
-        auth_header.removeprefix("Bearer ").strip()
-        if auth_header.startswith("Bearer ")
-        else None
-    )
-    if not verify_internal_cron_token(token):
-        raise HTTPException(status_code=401, detail="Invalid internal cron token")
 
 
 def _require_debug_admin_session(session: dict) -> None:
@@ -551,6 +539,12 @@ def update_profile_payload(
                     conn=active_uow.conn,
                     **kwargs,
                 ),
+                fetch_profiles_for_user=lambda user_id: fetch_profiles_for_user(
+                    user_id=user_id,
+                    connect=psycopg.connect,
+                    database_url=get_database_url(),
+                    conn=active_uow.conn,
+                ),
             )
     except ValueError as error:
         raise _to_http_exception(error) from error
@@ -871,8 +865,4 @@ def get_auth_session_payload(
         "email": email,
         "can_debug_access": can_use_debug_features(email),
     }
-
-
-def run_daily_digest_cron_payload() -> dict:
-    return run_daily_digest_for_all_users()
 
