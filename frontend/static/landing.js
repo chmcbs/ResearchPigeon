@@ -6,18 +6,18 @@ const linkEl = document.getElementById("signup-link");
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
   const email = document.getElementById("email").value.trim();
-  statusEl.textContent = "Sending magic link...";
+  setMagicLinkFormStatus(statusEl, MAGIC_LINK_SENDING_MESSAGE);
   linkWrap.classList.add("hidden");
   try {
     const payload = await apiRequest("/auth/magic-link/request", "POST", { email });
     if (payload.magic_link) {
-      statusEl.textContent = "Check your inbox for the confirmation link.";
+      setMagicLinkFormStatus(statusEl, MAGIC_LINK_INBOX_MESSAGE);
       linkEl.href = payload.magic_link;
       linkWrap.classList.remove("hidden");
     } else {
-      statusEl.textContent = "Check your inbox for the confirmation link.";
+      setMagicLinkFormStatus(statusEl, MAGIC_LINK_INBOX_MESSAGE);
     }
   } catch (error) {
-    statusEl.textContent = String(error.message || error);
+    setMagicLinkFormStatus(statusEl, formatMagicLinkError(error));
   }
 });

@@ -26,7 +26,7 @@ def _mock_connection_with_cursor(cursor):
 
 
 def test_normalize_email_rejects_invalid_values():
-    with pytest.raises(ValueError, match="email must be valid"):
+    with pytest.raises(ValueError, match="valid email address"):
         auth._normalize_email("not-an-email")
 
     with pytest.raises(ValueError, match="too long"):
@@ -63,7 +63,7 @@ def test_verify_magic_link_rejects_missing_token(monkeypatch):
     cursor.fetchone.return_value = None
     monkeypatch.setattr(db_module.psycopg, "connect", _mock_connection_with_cursor(cursor))
 
-    with pytest.raises(ValueError, match="invalid or expired"):
+    with pytest.raises(ValueError, match="sign-in link is invalid"):
         auth.verify_magic_link("bad-token")
 
 

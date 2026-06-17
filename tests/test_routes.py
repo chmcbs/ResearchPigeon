@@ -258,15 +258,15 @@ def test_landing_profiles_and_digest_pages_are_served():
     papers = client.get("/papers")
 
     assert landing.status_code == 200
-    assert "<title>[NAME]</title>" in landing.text
+    assert "<title>ResearchPigeon</title>" in landing.text
     assert profiles.status_code == 200
-    assert "<title>Profiles - [NAME]</title>" in profiles.text
+    assert "<title>Profiles - ResearchPigeon</title>" in profiles.text
     assert preferences_redirect.status_code == 307
     assert preferences_redirect.headers["location"] == "/profiles"
     assert digest.status_code == 200
-    assert "<title>Daily Digest - [NAME]</title>" in digest.text
+    assert "<title>Dev - ResearchPigeon</title>" in digest.text
     assert papers.status_code == 200
-    assert "<title>Papers - [NAME]</title>" in papers.text
+    assert "<title>Papers - ResearchPigeon</title>" in papers.text
 
 
 def test_magic_link_request_route_returns_payload(monkeypatch):

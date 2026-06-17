@@ -3,40 +3,48 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>[NAME]</title>
-  <link rel="stylesheet" href="/static/styles.css?v=18">
+  <link rel="icon" href="/static/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon.png">
+  <title>ResearchPigeon</title>
+  <link rel="stylesheet" href="/static/styles.css?v=29">
 </head>
 <body data-document-title="">
   <header class="topbar">
-    <div class="brand">[NAME]</div>
+    <div class="brand product-lockup">
+      <img src="/static/favicon.png" alt="" class="product-icon" width="32" height="32">
+      <span class="product-name-text">ResearchPigeon</span>
+    </div>
     <div class="row">
       <a class="link-btn" href="/profiles">Profiles</a>
       <a class="link-btn" href="/papers">Papers</a>
-      <a class="link-btn hidden" href="/digest" data-debug-admin>Digest (Dev)</a>
+      <a class="link-btn hidden" href="/digest" data-debug-admin>Dev</a>
     </div>
   </header>
 
   <main class="container">
     <section class="hero">
-      <h1>[HEADING]</h1>
-      <p>
-        [SUBHEADING]
-      </p>
+      <h1 class="product-lockup">
+        <span class="product-name-text">ResearchPigeon</span>
+        <img src="/static/logo.png" alt="" class="product-logo" width="70" height="70">
+      </h1>
     </section>
 
-    <section class="panel landing-signup">
+    <div class="landing-body">
+      <p class="landing-tagline mono-subtitle">Personalised daily digest for arXiv papers.</p>
+
+      <section class="panel signup-panel">
       <h2>Enter your email to get started</h2>
       <form id="signup-form" class="stack">
-        <label for="email">Email</label>
-        <input id="email" type="email" placeholder="you@example.com" required>
+        <input id="email" type="email" placeholder="email@example.com" required aria-label="Email">
         <button type="submit">Send magic link</button>
       </form>
-      <p id="signup-status" class="status muted"></p>
+      <p id="signup-status" class="status"></p>
       <p id="signup-link-wrap" class="hidden">
         Dev magic link:
         <a id="signup-link" href="#">open profiles</a>
       </p>
     </section>
+    </div>
   </main>
 
   <script src="/static/site.js"></script>

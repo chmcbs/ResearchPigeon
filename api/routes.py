@@ -75,7 +75,7 @@ from api.schemas import (
     EmailSettingsResponse,
     UpdateEmailSettingsRequest,
 )
-from core.config import get_arxiv_category_options, get_product_name, is_app_https, is_production
+from core.config import get_arxiv_category_options, get_product_name, is_app_https, is_debug_features_enabled, is_production
 from core.db import check_database_connection
 from core.logging import configure_logging
 from core.security import (
@@ -171,8 +171,9 @@ def preferences_page_redirect() -> RedirectResponse:
 
 
 @app.get("/digest", response_class=FileResponse)
-def digest_page(request: Request) -> FileResponse:
-    require_debug_admin(request)
+def digest_page() -> FileResponse:
+    if not is_debug_features_enabled():
+        raise HTTPException(status_code=404, detail="Not found")
     return FileResponse(frontend_dir / "digest.html")
 
 

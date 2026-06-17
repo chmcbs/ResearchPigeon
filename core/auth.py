@@ -6,6 +6,11 @@ import hashlib
 import secrets
 from datetime import UTC, datetime, timedelta
 
+from core.auth_messages import (
+    EMAIL_TOO_LONG_MESSAGE,
+    INVALID_EMAIL_MESSAGE,
+    MAGIC_LINK_INVALID_MESSAGE,
+)
 from core.db import connection_scope
 
 MAGIC_LINK_TTL_MINUTES = 30
@@ -79,12 +84,12 @@ WHERE session_id = %s;
 def _normalize_email(email: str) -> str:
     value = email.strip().lower()
     if len(value) > MAX_EMAIL_LENGTH:
-        raise ValueError("email is too long")
+        raise ValueError(EMAIL_TOO_LONG_MESSAGE)
     if value.count("@") != 1:
-        raise ValueError("email must be valid")
+        raise ValueError(INVALID_EMAIL_MESSAGE)
     local, domain = value.split("@", 1)
     if not local or not domain or "." not in domain:
-        raise ValueError("email must be valid")
+        raise ValueError(INVALID_EMAIL_MESSAGE)
     return value
 
 
@@ -125,7 +130,7 @@ def verify_magic_link(token: str, conn=None) -> tuple[str, str, str]:
             cur.execute(CONSUME_MAGIC_TOKEN_SQL, (token_hash,))
             row = cur.fetchone()
             if row is None:
-                raise ValueError("magic link is invalid or expired")
+                raise ValueError(MAGIC_LINK_INVALID_MESSAGE)
             user_id = row[0]
             email = row[1]
             cur.execute(DELETE_EXPIRED_SESSIONS_SQL)

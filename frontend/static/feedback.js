@@ -16,6 +16,9 @@ const feedbackNavLinks = Array.from(document.querySelectorAll(".feedback-hub-nav
 const feedbackHubLayout = document.querySelector(".feedback-hub-layout");
 const feedbackHubNav = document.querySelector(".feedback-hub-nav");
 const feedbackHubEmpty = document.getElementById("feedback-hub-empty");
+const feedbackHubIntro = document.querySelector(".feedback-hub-intro");
+const feedbackHubFilters = document.querySelector(".feedback-hub-filters");
+const debugResetDbBtn = document.getElementById("debug-reset-db-btn");
 const feedbackSectionIds = ["feedback-feed", "feedback-liked", "feedback-disliked"];
 const FEEDBACK_SECTIONS = [
   { id: "feedback-feed", key: "seen", listEl: feedList, emptyText: "Nothing in your feed yet.", section: "feed" },
@@ -41,7 +44,12 @@ const selectedProfileIds = new Set();
 let selectedDateFilter = "all";
 
 function setStatus(message, isError) {
-  setPageStatus(feedbackStatus, message, isError);
+  feedbackStatus.textContent = message || "";
+  if (!message) {
+    feedbackStatus.style.removeProperty("color");
+    return;
+  }
+  feedbackStatus.style.color = "#b91c1c";
 }
 
 function profileLabel(profile) {
@@ -278,11 +286,18 @@ function updateHubLayout() {
     return;
   }
 
-  const showNavByVolume = countTotalPapers() > 9;
+  const totalPapers = countTotalPapers();
 
   if (feedbackHubEmpty) {
-    feedbackHubEmpty.classList.toggle("hidden", countTotalPapers() > 0);
+    feedbackHubEmpty.classList.toggle("hidden", totalPapers > 0);
   }
+  if (feedbackHubIntro) {
+    feedbackHubIntro.classList.toggle("hidden", totalPapers === 0);
+  }
+  updateFiltersVisibility();
+  feedbackHubLayout.classList.toggle("hidden", totalPapers === 0);
+
+  const showNavByVolume = totalPapers > 9;
 
   FEEDBACK_SECTIONS.forEach(({ id, key }) => {
     const section = document.getElementById(id);
@@ -325,6 +340,13 @@ function applyFilters() {
     renderList(listEl, getFilteredSectionItems(key), emptyText, section);
   });
   updateHubLayout();
+}
+
+function updateFiltersVisibility() {
+  if (!feedbackHubFilters) {
+    return;
+  }
+  feedbackHubFilters.classList.toggle("hidden", countTotalPapers() === 0);
 }
 
 function renderProfileFilter() {
@@ -424,6 +446,37 @@ bindMagicLinkForm({
   linkEl: authLink,
   nextPath: "/papers",
 });
+
+if (debugResetDbBtn) {
+  debugResetDbBtn.addEventListener("click", async () => {
+    const ok = window.confirm(
+      "Delete ALL papers, ingestion runs, recommendations, and feedback from the database?\n\n" +
+        "Profiles, keywords, and profile preferences are kept. Preference embeddings are reset " +
+        "to each profile's initial interest sentence.\n\n" +
+        "Admin-only debug reset. Requires DEBUG_ADMIN_EMAILS on the server.",
+    );
+    if (!ok) {
+      return;
+    }
+    debugResetDbBtn.disabled = true;
+    setStatus("Resetting paper and feedback data...", false);
+    try {
+      const result = await apiRequest("/debug/digest-data/reset", "POST");
+      await loadFeedbackHub();
+      setStatus(
+        `Runs removed: ${result.deleted_runs}\n` +
+          `Papers removed: ${result.deleted_papers}\n` +
+          `Preference embeddings reset: ${result.reset_preference_embeddings}\n` +
+          "Debug reset complete.",
+        false,
+      );
+    } catch (error) {
+      setStatus(String(error.message || error), true);
+    } finally {
+      debugResetDbBtn.disabled = false;
+    }
+  });
+}
 
 async function init() {
   try {

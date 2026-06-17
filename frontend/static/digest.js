@@ -6,8 +6,9 @@ const authLink = document.getElementById("auth-link");
 const sessionLabel = document.getElementById("session-label");
 const digestStatus = document.getElementById("digest-status");
 const sectionsWrap = document.getElementById("sections-wrap");
+const digestPreviewCard = document.querySelector(".digest-preview-card");
+const digestPreviewDisclaimer = document.querySelector(".digest-preview-disclaimer");
 const generateBtn = document.getElementById("generate-btn");
-const debugResetDbBtn = document.getElementById("debug-reset-db-btn");
 const sectionTemplate = document.getElementById("section-template");
 const GENERATE_PROGRESS_POLL_MS = 500;
 let generateProgressTimer = null;
@@ -72,13 +73,23 @@ function starsDisplay(percent) {
   return "⭐".repeat(starRatingFromPercent(percent));
 }
 
+function sectionsWithPicks(sections) {
+  return (sections || []).filter((section) => (section.picks || []).length > 0);
+}
+
+function setDigestPreviewVisible(visible) {
+  if (digestPreviewCard) {
+    digestPreviewCard.classList.toggle("hidden", !visible);
+  }
+  if (digestPreviewDisclaimer) {
+    digestPreviewDisclaimer.classList.toggle("hidden", !visible);
+  }
+}
+
 function renderSections(sections) {
   sectionsWrap.innerHTML = "";
-  if (!sections || !sections.length) {
-    return;
-  }
-
-  const withPicks = sections.filter((section) => (section.picks || []).length > 0);
+  const withPicks = sectionsWithPicks(sections);
+  setDigestPreviewVisible(withPicks.length > 0);
   if (!withPicks.length) {
     return;
   }
@@ -193,7 +204,7 @@ async function generateDigest() {
     ) {
       setStatus(
         "Descriptions were not generated as LLM timed out.",
-        false,
+        true,
       );
     } else {
       setStatus("", false);
@@ -220,42 +231,14 @@ generateBtn.addEventListener("click", async () => {
   }
 });
 
-debugResetDbBtn.addEventListener("click", async () => {
-  var ok = window.confirm(
-    "Delete ALL papers, ingestion runs, recommendations, and feedback from the database?\n\n" +
-      "Profiles, keywords, and profile preferences are kept. Preference embeddings are reset " +
-      "to each profile's initial interest sentence.\n\n" +
-      "Admin-only debug reset. Requires DEBUG_ADMIN_EMAILS on the server.",
-  );
-  if (!ok) {
-    return;
-  }
-  debugResetDbBtn.disabled = true;
-  setStatus("Resetting paper and feedback data...", false);
-  try {
-    var result = await apiRequest("/debug/digest-data/reset", "POST");
-    await loadDigest();
-    setStatus(
-      "Debug reset complete. Removed " +
-        result.deleted_runs +
-        " run(s) and " +
-        result.deleted_papers +
-        " paper(s). Reset " +
-        result.reset_preference_embeddings +
-        " preference embedding(s) to initial interest.",
-      false,
-    );
-  } catch (error) {
-    setStatus(String(error.message || error), true);
-  } finally {
-    debugResetDbBtn.disabled = false;
-  }
-});
-
 async function init() {
   try {
-    const authenticated = await checkSession();
-    if (!authenticated) {
+    const session = await checkSession();
+    if (!session) {
+      return;
+    }
+    if (!session.can_debug_access) {
+      setStatus("Debug access is restricted to configured admin emails.", true);
       return;
     }
     await loadDigest();

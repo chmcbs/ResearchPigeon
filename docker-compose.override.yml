@@ -1,0 +1,7 @@
+# Local dev overrides (auto-loaded by `docker compose up`, not used with prod -f flags).
+services:
+  api:
+    volumes:
+      - ./frontend:/app/frontend:ro
+    environment:
+      DISABLE_RATE_LIMIT: "1"

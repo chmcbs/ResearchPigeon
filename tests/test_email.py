@@ -14,7 +14,7 @@ def test_send_magic_link_email_requires_configuration(monkeypatch):
     monkeypatch.delenv("SMTP_HOST", raising=False)
     monkeypatch.delenv("EMAIL_FROM", raising=False)
 
-    with pytest.raises(EmailDeliveryError, match="not configured"):
+    with pytest.raises(EmailDeliveryError, match="temporarily unavailable"):
         send_magic_link_email("user@example.com", "http://localhost/verify?token=abc")
 
 
@@ -96,5 +96,5 @@ def test_send_magic_link_email_wraps_smtp_failures(monkeypatch):
     monkeypatch.setenv("EMAIL_FROM", "noreply@example.com")
 
     with patch("core.email.smtplib.SMTP", side_effect=OSError("connection refused")):
-        with pytest.raises(EmailDeliveryError, match="failed to send"):
+        with pytest.raises(EmailDeliveryError, match="couldn't send"):
             send_magic_link_email("user@example.com", "http://localhost/verify?token=abc")

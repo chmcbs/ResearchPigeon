@@ -8,6 +8,7 @@ from datetime import UTC, datetime, timedelta
 
 import psycopg
 
+from core.auth_messages import RATE_LIMIT_USER_MESSAGE
 from core.config import is_database_rate_limit_enabled, is_rate_limit_disabled
 from core.db import get_database_url
 
@@ -72,7 +73,7 @@ def _check_rate_limit_in_memory(
 
         bucket = pruned.get(key, [])
         if len(bucket) >= max_attempts:
-            raise RateLimitExceeded("rate limit exceeded")
+            raise RateLimitExceeded(RATE_LIMIT_USER_MESSAGE)
 
         bucket.append(now)
         pruned[key] = bucket
@@ -94,7 +95,7 @@ def _check_rate_limit_database(
             cur.execute(COUNT_RATE_LIMIT_EVENTS_SQL, (key, cutoff))
             attempt_count = int(cur.fetchone()[0])
             if attempt_count >= max_attempts:
-                raise RateLimitExceeded("rate limit exceeded")
+                raise RateLimitExceeded(RATE_LIMIT_USER_MESSAGE)
             cur.execute(INSERT_RATE_LIMIT_EVENT_SQL, (key,))
 
 

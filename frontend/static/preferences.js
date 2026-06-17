@@ -5,7 +5,10 @@ const authLinkWrap = document.getElementById("auth-link-wrap");
 const authLink = document.getElementById("auth-link");
 const sessionLabel = document.getElementById("session-label");
 const prefsStatus = document.getElementById("prefs-status");
+const prefsEmpty = document.getElementById("prefs-empty");
 const profilesGrid = document.getElementById("profiles-grid");
+const emailSettingsPanel = document.querySelector(".email-settings-panel");
+const profilesOrderTip = document.querySelector(".profiles-order-tip");
 const addProfileBtn = document.getElementById("add-profile-btn");
 const debugResetProfilesBtn = document.getElementById("debug-reset-profiles-btn");
 const digestEmailsToggle = document.getElementById("digest-emails-toggle");
@@ -16,7 +19,12 @@ let profiles = [];
 let digestSubscribed = true;
 
 function setStatus(message, isError) {
-  setPageStatus(prefsStatus, message, isError);
+  prefsStatus.textContent = message || "";
+  if (!message) {
+    prefsStatus.style.removeProperty("color");
+    return;
+  }
+  prefsStatus.style.color = "#b91c1c";
 }
 
 async function checkSession() {
@@ -38,12 +46,20 @@ function getSelectedProfileIds() {
     .map((item) => item.profile_id);
 }
 
-function setSummaryLine(element, label, value) {
+function setSummaryLine(element, label, value, options) {
   element.innerHTML = "";
   const strong = document.createElement("strong");
   strong.textContent = `${label}: `;
   element.appendChild(strong);
-  element.appendChild(document.createTextNode(value || "-"));
+  const displayValue = value || "-";
+  if (options && options.valueClass) {
+    const span = document.createElement("span");
+    span.className = options.valueClass;
+    span.textContent = displayValue;
+    element.appendChild(span);
+  } else {
+    element.appendChild(document.createTextNode(displayValue));
+  }
 }
 
 function calendarDayKey(value) {
@@ -287,10 +303,25 @@ async function loadProfiles() {
   renderProfiles();
 }
 
-function renderProfiles() {
+function updateProfilesEmptyStateVisibility() {
+  const hasSavedProfiles = profiles.some((item) => !item.is_draft);
+  const savedProfileCount = profiles.filter((item) => !item.is_draft).length;
+  if (prefsEmpty) {
+    prefsEmpty.classList.toggle("hidden", profiles.length > 0);
+  }
+  if (emailSettingsPanel) {
+    emailSettingsPanel.classList.toggle("hidden", !hasSavedProfiles);
+  }
+  if (profilesOrderTip) {
+    profilesOrderTip.classList.toggle("hidden", savedProfileCount < 2);
+  }
+}
+
+function renderProfiles(options = {}) {
+  const focusProfileId = options.focusProfileId || null;
   profilesGrid.innerHTML = "";
+  updateProfilesEmptyStateVisibility();
   if (!profiles.length) {
-    profilesGrid.innerHTML = "<p class='muted'>No profiles yet. Add your first profile.</p>";
     return;
   }
 
@@ -310,19 +341,38 @@ function renderProfiles() {
     const feedbackPanel = node.querySelector(".feedback-panel");
     const feedbackList = node.querySelector(".feedback-list");
     const digestCheckbox = node.querySelector(".digest-checkbox");
+    const activeToggle = node.querySelector(".active-toggle");
     const keywordList = node.querySelector(".keyword-list");
     const saveBtn = node.querySelector(".save-btn");
     const cancelEditBtn = node.querySelector(".cancel-edit-btn");
     const deleteBtn = node.querySelector(".delete-btn");
     const editBtn = node.querySelector(".edit-btn");
+    const draftActions = node.querySelector(".draft-actions");
+    const profileCardBottom = node.querySelector(".profile-card-bottom");
+
+    if (isDraft) {
+      draftActions.appendChild(saveBtn);
+      draftActions.appendChild(deleteBtn);
+      profileCardBottom.classList.add("hidden");
+    } else if (isEditing) {
+      draftActions.appendChild(saveBtn);
+      draftActions.appendChild(deleteBtn);
+      profileCardBottom.classList.add("hidden");
+    } else {
+      profileCardBottom.classList.remove("hidden");
+      profileCardBottom.appendChild(deleteBtn);
+    }
 
     profile.keywords = Array.isArray(profile.keywords) ? profile.keywords : [];
     profile.is_adding_keyword = Boolean(profile.is_adding_keyword);
     profile.feedback_expanded = Boolean(profile.feedback_expanded);
     profileTitleInput.value = profile.profile_name || "";
+    profileTitleInput.placeholder = isDraft ? "Profile name" : "";
     profileTitleInput.disabled = !isEditing;
     interestText.value = profile.interest_sentence;
-    setSummaryLine(summaryCategory, "Category", profile.category);
+    setSummaryLine(summaryCategory, "Category", profile.category, {
+      valueClass: "summary-category-value",
+    });
     setSummaryLine(summaryDescription, "Description", profile.interest_sentence);
     feedbackToggle.textContent = profile.feedback_expanded ? "Hide papers" : "Show papers";
 
@@ -332,13 +382,16 @@ function renderProfiles() {
     interestLabel.classList.toggle("hidden", !showDraftFields);
     interestText.classList.toggle("hidden", !showDraftFields);
     summaryBlock.classList.toggle("hidden", isDraft);
-    feedbackToggle.classList.toggle("hidden", isDraft);
-    feedbackPanel.classList.toggle("hidden", isDraft || !profile.feedback_expanded);
+    feedbackToggle.classList.toggle("hidden", isDraft || isEditing);
+    feedbackPanel.classList.toggle("hidden", isDraft || isEditing || !profile.feedback_expanded);
     interestText.readOnly = !isDraft;
     interestText.placeholder = isDraft ? "Describe your research interests." : "";
     digestCheckbox.checked = profile.digest_enabled;
     const digestPaused = !digestSubscribed;
     digestCheckbox.disabled = digestPaused || isDraft;
+    activeToggle.classList.toggle("hidden", isDraft);
+    node.classList.toggle("is-draft-card", isDraft);
+    node.classList.toggle("is-editing-card", isEditing && !isDraft);
     node.classList.toggle("digest-paused", digestPaused);
     saveBtn.textContent = isDraft ? "Create profile" : "Save profile";
     deleteBtn.textContent = isDraft ? "Cancel" : "Delete";
@@ -351,6 +404,50 @@ function renderProfiles() {
     profileTitleInput.addEventListener("input", () => {
       profile.profile_name = profileTitleInput.value;
     });
+
+    if (isEditing) {
+      node.tabIndex = -1;
+
+      profileTitleInput.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") {
+          return;
+        }
+        event.preventDefault();
+        profileTitleInput.blur();
+        node.focus({ preventScroll: true });
+      });
+
+      if (isDraft) {
+        interestText.addEventListener("keydown", (event) => {
+          if (event.key !== "Enter" || event.shiftKey) {
+            return;
+          }
+          event.preventDefault();
+          interestText.blur();
+          node.focus({ preventScroll: true });
+        });
+      }
+
+      node.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter" || event.target !== node) {
+          return;
+        }
+        event.preventDefault();
+        if (!saveBtn.disabled) {
+          saveBtn.click();
+        }
+      });
+    }
+
+    if (isDraft) {
+      const placeholderOption = document.createElement("option");
+      placeholderOption.value = "";
+      placeholderOption.textContent = "Select a category";
+      placeholderOption.disabled = true;
+      placeholderOption.selected = !profile.category;
+      placeholderOption.hidden = !profile.category;
+      categorySelect.appendChild(placeholderOption);
+    }
 
     categories.forEach((category) => {
       const option = document.createElement("option");
@@ -367,6 +464,25 @@ function renderProfiles() {
       }
       categorySelect.appendChild(option);
     });
+
+    categorySelect.addEventListener("change", () => {
+      profile.category = categorySelect.value;
+      syncCategorySelectAppearance();
+      setStatus("", false);
+      if (isDraft && categorySelect.value) {
+        categorySelect.blur();
+        node.focus({ preventScroll: true });
+      }
+    });
+
+    function syncCategorySelectAppearance() {
+      categorySelect.classList.toggle(
+        "is-unselected",
+        isDraft && !categorySelect.value,
+      );
+    }
+
+    syncCategorySelectAppearance();
 
     function drawKeywords(values) {
       keywordList.innerHTML = "";
@@ -404,17 +520,16 @@ function renderProfiles() {
         return;
       }
 
-      const addChip = document.createElement("button");
-      addChip.className = "keyword-chip keyword-add-chip";
-      addChip.type = "button";
-      addChip.textContent = "+keyword";
-      addChip.addEventListener("click", () => {
-        profile.is_adding_keyword = true;
-        drawKeywords(profile.keywords || []);
-      });
-      keywordList.appendChild(addChip);
-
       if (!profile.is_adding_keyword) {
+        const addChip = document.createElement("button");
+        addChip.className = "keyword-chip keyword-add-chip";
+        addChip.type = "button";
+        addChip.textContent = "+keyword";
+        addChip.addEventListener("click", () => {
+          profile.is_adding_keyword = true;
+          drawKeywords(profile.keywords || []);
+        });
+        keywordList.appendChild(addChip);
         return;
       }
 
@@ -443,7 +558,7 @@ function renderProfiles() {
         }
         if (isDraft) {
           profile.keywords = [...(profile.keywords || []), normalized.keyword];
-          profile.is_adding_keyword = false;
+          profile.is_adding_keyword = true;
           drawKeywords(profile.keywords);
           setStatus("", false);
           return;
@@ -453,7 +568,7 @@ function renderProfiles() {
             keyword: normalized.keyword,
           });
           profile.keywords = Array.isArray(payload.keywords) ? payload.keywords : [];
-          profile.is_adding_keyword = false;
+          profile.is_adding_keyword = true;
           drawKeywords(profile.keywords);
           setStatus("", false);
         } catch (error) {
@@ -469,6 +584,11 @@ function renderProfiles() {
       input.addEventListener("keydown", async (event) => {
         if (event.key === "Enter") {
           event.preventDefault();
+          if (!input.value.trim()) {
+            profile.is_adding_keyword = false;
+            drawKeywords(profile.keywords || []);
+            return;
+          }
           await addKeywordFromInlineInput();
         } else if (event.key === "Escape") {
           profile.is_adding_keyword = false;
@@ -588,9 +708,15 @@ function renderProfiles() {
 
     saveBtn.addEventListener("click", async () => {
       if (isDraft) {
+        const selectedCategory = categorySelect.value.trim();
+        if (!selectedCategory) {
+          setStatus("Category is required when creating a profile.", true);
+          categorySelect.focus();
+          return;
+        }
         const interestSentence = interestText.value.trim();
         if (!interestSentence) {
-          setStatus("Interest sentence is required when creating a profile.", true);
+          setStatus("Description is required when creating a profile.", true);
           interestText.focus();
           return;
         }
@@ -725,6 +851,10 @@ function renderProfiles() {
 
     attachProfileDragBehavior(node, profile);
     profilesGrid.appendChild(node);
+    if (focusProfileId && profile.profile_id === focusProfileId) {
+      profileTitleInput.focus();
+      profileTitleInput.select();
+    }
   });
 }
 
@@ -745,18 +875,18 @@ addProfileBtn.addEventListener("click", async () => {
     setStatus("Finish creating the current new profile first.", true);
     return;
   }
+  const draftId = `draft-${Date.now()}`;
   profiles.unshift({
-    profile_id: `draft-${Date.now()}`,
+    profile_id: draftId,
     profile_slot: profiles.length + 1,
     profile_name: `Profile ${profiles.length + 1}`,
-    category:
-      (categories[0] && (categories[0].id || categories[0])) || "cs.AI",
+    category: "",
     interest_sentence: "",
     digest_enabled: true,
     keywords: [],
     is_draft: true,
   });
-  renderProfiles();
+  renderProfiles({ focusProfileId: draftId });
   setStatus("", false);
 });
 
@@ -775,8 +905,10 @@ debugResetProfilesBtn.addEventListener("click", async () => {
   try {
     const result = await apiRequest("/debug/profile-data/reset", "POST");
     await loadProfiles();
-    prefsStatus.textContent = `Removed ${result.deleted_profiles} profile(s). Preferences and keywords cleared.`;
-    prefsStatus.style.color = "#6b7280";
+    setStatus(
+      `Profiles removed: ${result.deleted_profiles}\nDebug reset complete.`,
+      false,
+    );
   } catch (error) {
     setStatus(String(error.message || error), true);
   } finally {

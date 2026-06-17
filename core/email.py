@@ -16,6 +16,10 @@ from core.config import (
     get_smtp_username,
     is_email_delivery_configured,
 )
+from core.auth_messages import (
+    EMAIL_DELIVERY_UNAVAILABLE_MESSAGE,
+    EMAIL_SEND_FAILED_MESSAGE,
+)
 from core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -50,7 +54,7 @@ def deliver_email_message(message: EmailMessage) -> None:
 
 def send_magic_link_email(to_email: str, magic_link: str) -> None:
     if not is_email_delivery_configured():
-        raise EmailDeliveryError("email delivery is not configured")
+        raise EmailDeliveryError(EMAIL_DELIVERY_UNAVAILABLE_MESSAGE)
 
     message = EmailMessage()
     message["Subject"] = f"Sign in to {get_product_name()}"
@@ -69,4 +73,4 @@ def send_magic_link_email(to_email: str, magic_link: str) -> None:
             "Magic link email delivery failed",
             extra={"event": "auth.magic_link.email_failed", "to_email": to_email},
         )
-        raise EmailDeliveryError("failed to send magic link email") from error
+        raise EmailDeliveryError(EMAIL_SEND_FAILED_MESSAGE) from error

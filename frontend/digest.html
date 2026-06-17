@@ -3,70 +3,81 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Daily Digest - [NAME]</title>
-  <link rel="stylesheet" href="/static/styles.css?v=10">
+  <link rel="icon" href="/static/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon.png">
+  <title>Dev - ResearchPigeon</title>
+  <link rel="stylesheet" href="/static/styles.css?v=34">
 </head>
-<body data-document-title="Daily Digest">
+<body data-document-title="Dev">
   <header class="topbar">
-    <div class="brand">[NAME]</div>
+    <div class="brand product-lockup">
+      <img src="/static/favicon.png" alt="" class="product-icon" width="32" height="32">
+      <span class="product-name-text">ResearchPigeon</span>
+    </div>
     <div class="row">
       <div class="session-menu">
         <button type="button" id="session-label" class="session-menu-trigger muted" disabled>
           Checking session...
         </button>
         <div class="session-menu-panel hidden">
-          <button type="button" class="session-logout-btn">Logout?</button>
+          <button type="button" class="session-logout-btn">Logout</button>
         </div>
       </div>
       <a class="link-btn" href="/profiles">Profiles</a>
       <a class="link-btn" href="/papers">Papers</a>
-      <a class="link-btn hidden" href="/digest" data-debug-admin>Digest (Dev)</a>
+      <a class="link-btn hidden" href="/digest" data-debug-admin>Dev</a>
     </div>
   </header>
 
   <main class="container">
-    <section id="auth-gate" class="panel hidden">
-      <h1>Daily Digest Preview</h1>
-      <p class="muted">Sign in by email to preview your daily digest.</p>
-      <form id="auth-form" class="stack">
-        <label for="auth-email">Email</label>
-        <input id="auth-email" type="email" placeholder="you@example.com" required>
-        <button type="submit">Send magic link</button>
-      </form>
-      <p id="auth-status" class="status muted"></p>
-      <p id="auth-link-wrap" class="hidden">
-        Dev magic link:
-        <a id="auth-link" href="#">open digest preview</a>
-      </p>
-    </section>
+    <div class="sign-in-shell">
+      <section class="hero">
+        <h1 class="product-lockup">
+          <span class="product-name-text">ResearchPigeon</span>
+          <img src="/static/logo.png" alt="" class="product-logo" width="70" height="70">
+        </h1>
+      </section>
+
+      <div class="signup-body">
+        <p class="landing-tagline mono-subtitle">Personalised daily digest for arXiv papers.</p>
+
+        <section id="auth-gate" class="panel signup-panel hidden">
+          <h2>Sign in to preview digest</h2>
+          <form id="auth-form" class="stack">
+            <input id="auth-email" type="email" placeholder="email@example.com" required aria-label="Email">
+            <button type="submit">Send magic link</button>
+          </form>
+          <p id="auth-status" class="status"></p>
+          <p id="auth-link-wrap" class="hidden">
+            Dev magic link:
+            <a id="auth-link" href="#">open digest preview</a>
+          </p>
+        </section>
+      </div>
+    </div>
 
     <section id="digest-app" class="hidden">
       <div class="section-header">
-        <h1>Daily Digest Preview</h1>
+        <h1>Dev</h1>
         <div class="row">
           <button id="generate-btn" type="button">Generate new digest</button>
-          <button
-            id="debug-reset-db-btn"
-            type="button"
-            class="danger hidden"
-            data-debug-admin
-            title="Admin only: requires ALLOW_DEBUG_FEATURES and DEBUG_ADMIN_EMAILS; deletes all papers, runs, picks, and feedback; resets preference embeddings to initial interest"
-          >
-            Hard reset papers (debug)
-          </button>
         </div>
       </div>
-      <p id="digest-status" class="status muted"></p>
-      <h2 class="digest-preview-header">Your daily research digest from <span class="product-name-slot">[NAME]</span></h2>
-      <div class="panel digest-preview-card">
+      <p class="muted digest-hub-intro">Generate and preview a daily digest for your profiles.</p>
+      <p id="digest-status" class="status"></p>
+      <div class="panel digest-preview-card hidden">
+        <div class="digest-preview-header">
+          <img src="/static/logo.png" alt="" class="product-logo digest-preview-logo" width="70" height="70">
+          <h2 class="digest-preview-title">Your daily digest from <span class="product-name-text">ResearchPigeon</span></h2>
+        </div>
         <div id="sections-wrap" class="digest-sections"></div>
         <div class="digest-feedback-cta">
-          <a class="digest-feedback-cta-btn" href="/papers">Rate papers</a>
-          <a class="digest-feedback-cta-btn" href="/profiles">Manage profiles</a>
+          <a class="link-btn" href="/papers">Rate papers</a>
+          <a class="link-btn" href="/profiles">Manage profiles</a>
         </div>
       </div>
-      <p class="digest-preview-disclaimer muted tiny">
-        Papers are sourced from arXiv.org
+      <p class="digest-preview-disclaimer muted tiny hidden">
+        Papers sourced from <span class="digest-source-domain">arxiv.org</span>
       </p>
     </section>
   </main>
@@ -75,7 +86,7 @@
     <article class="digest-section">
       <div class="row between">
         <h2 class="digest-section-title"></h2>
-        <span class="tiny muted digest-category"></span>
+        <span class="muted digest-category"></span>
       </div>
       <ul class="digest-picks"></ul>
     </article>
@@ -85,6 +96,6 @@
   <script src="/static/api-client.js"></script>
   <script src="/static/auth-ui.js"></script>
   <script src="/static/format.js"></script>
-  <script src="/static/digest.js?v=18"></script>
+  <script src="/static/digest.js?v=19"></script>
 </body>
 </html>

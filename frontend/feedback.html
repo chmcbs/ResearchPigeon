@@ -3,47 +3,76 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Papers - [NAME]</title>
-  <link rel="stylesheet" href="/static/styles.css?v=19">
+  <link rel="icon" href="/static/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon.png">
+  <title>Papers - ResearchPigeon</title>
+  <link rel="stylesheet" href="/static/styles.css?v=27">
 </head>
 <body data-document-title="Papers">
   <header class="topbar">
-    <div class="brand">[NAME]</div>
+    <div class="brand product-lockup">
+      <img src="/static/favicon.png" alt="" class="product-icon" width="32" height="32">
+      <span class="product-name-text">ResearchPigeon</span>
+    </div>
     <div class="row">
       <div class="session-menu">
         <button type="button" id="session-label" class="session-menu-trigger muted" disabled>
           Checking session...
         </button>
         <div class="session-menu-panel hidden">
-          <button type="button" class="session-logout-btn">Logout?</button>
+          <button type="button" class="session-logout-btn">Logout</button>
         </div>
       </div>
       <a class="link-btn" href="/profiles">Profiles</a>
       <a class="link-btn" href="/papers">Papers</a>
-      <a class="link-btn hidden" href="/digest" data-debug-admin>Digest (Dev)</a>
+      <a class="link-btn hidden" href="/digest" data-debug-admin>Dev</a>
     </div>
   </header>
 
   <main class="container">
-    <section id="auth-gate" class="panel hidden">
-      <h1>Papers</h1>
-      <p class="muted">Sign in to view papers.</p>
-      <form id="auth-form" class="stack auth-form">
-        <label for="auth-email">Email</label>
-        <input id="auth-email" type="email" placeholder="you@example.com" required>
-        <button type="submit">Send magic link</button>
-      </form>
-      <p id="auth-status" class="status muted"></p>
-      <p id="auth-link-wrap" class="hidden">
-        Dev magic link:
-        <a id="auth-link" href="#">open papers</a>
-      </p>
-    </section>
+    <div class="sign-in-shell">
+      <section class="hero">
+        <h1 class="product-lockup">
+          <span class="product-name-text">ResearchPigeon</span>
+          <img src="/static/logo.png" alt="" class="product-logo" width="70" height="70">
+        </h1>
+      </section>
+
+      <div class="signup-body">
+        <p class="landing-tagline mono-subtitle">Personalised daily digest for arXiv papers.</p>
+
+        <section id="auth-gate" class="panel signup-panel hidden">
+        <h2>Sign in to view papers</h2>
+        <form id="auth-form" class="stack">
+          <input id="auth-email" type="email" placeholder="email@example.com" required aria-label="Email">
+          <button type="submit">Send magic link</button>
+        </form>
+        <p id="auth-status" class="status"></p>
+        <p id="auth-link-wrap" class="hidden">
+          Dev magic link:
+          <a id="auth-link" href="#">open papers</a>
+        </p>
+      </section>
+      </div>
+    </div>
 
     <section id="feedback-app" class="hidden">
-      <h1>Papers</h1>
-      <p class="muted feedback-hub-intro">Rate papers to improve recommendation quality.</p>
-      <div class="feedback-hub-filters">
+      <div class="section-header">
+        <h1>Papers</h1>
+        <div class="row">
+          <button
+            id="debug-reset-db-btn"
+            type="button"
+            class="danger hidden"
+            data-debug-admin
+            title="Admin only: requires ALLOW_DEBUG_FEATURES and DEBUG_ADMIN_EMAILS; deletes all papers, runs, picks, and feedback; resets preference embeddings to initial interest"
+          >
+            Hard reset papers (debug)
+          </button>
+        </div>
+      </div>
+      <p class="muted feedback-hub-intro hidden">Rate papers to improve recommendation quality.</p>
+      <div class="feedback-hub-filters hidden">
         <div class="feedback-profile-filter">
           <span class="feedback-profile-filter-label">Profiles</span>
           <div id="profile-filter-chips" class="feedback-profile-filter-chips"></div>
@@ -53,18 +82,18 @@
           <div id="date-filter-chips" class="feedback-profile-filter-chips"></div>
         </div>
       </div>
-      <p id="feedback-status" class="status muted"></p>
       <p id="feedback-hub-empty" class="muted feedback-hub-empty-state hidden">
-        Nothing here yet. Papers from your daily digest will show up here.
+        Papers from your daily digest will show up here.
       </p>
-      <div class="feedback-hub-layout">
-        <nav class="feedback-hub-nav" aria-label="Paper sections">
+      <p id="feedback-status" class="status"></p>
+      <div class="feedback-hub-layout is-nav-hidden">
+        <nav class="feedback-hub-nav hidden" aria-label="Paper sections">
           <a class="feedback-hub-nav-link is-active" href="#feedback-feed">Feed</a>
           <a class="feedback-hub-nav-link" href="#feedback-liked">Liked</a>
           <a class="feedback-hub-nav-link" href="#feedback-disliked">Disliked</a>
         </nav>
         <div class="feedback-hub-stack">
-          <div id="feedback-feed" class="panel feedback-hub-column">
+          <div id="feedback-feed" class="panel feedback-hub-column hidden">
             <button
               type="button"
               class="feedback-hub-toggle"
@@ -76,7 +105,7 @@
             </button>
             <div id="feed-list" class="feedback-hub-list feedback-hub-panel-body"></div>
           </div>
-          <div id="feedback-liked" class="panel feedback-hub-column">
+          <div id="feedback-liked" class="panel feedback-hub-column hidden">
             <button
               type="button"
               class="feedback-hub-toggle"
@@ -88,7 +117,7 @@
             </button>
             <div id="liked-list" class="feedback-hub-list feedback-hub-panel-body"></div>
           </div>
-          <div id="feedback-disliked" class="panel feedback-hub-column">
+          <div id="feedback-disliked" class="panel feedback-hub-column hidden">
             <button
               type="button"
               class="feedback-hub-toggle"
@@ -102,9 +131,6 @@
           </div>
         </div>
       </div>
-      <p class="muted feedback-hub-footer">
-        <a class="link-btn" href="/profiles">Profiles</a>
-      </p>
     </section>
   </main>
 

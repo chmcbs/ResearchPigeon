@@ -3,48 +3,63 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Profiles - [NAME]</title>
-  <link rel="stylesheet" href="/static/styles.css?v=18">
+  <link rel="icon" href="/static/favicon.png" type="image/png">
+  <link rel="apple-touch-icon" href="/static/favicon.png">
+  <title>Profiles - ResearchPigeon</title>
+  <link rel="stylesheet" href="/static/styles.css?v=27">
 </head>
 <body data-document-title="Profiles">
   <header class="topbar">
-    <div class="brand">[NAME]</div>
+    <div class="brand product-lockup">
+      <img src="/static/favicon.png" alt="" class="product-icon" width="32" height="32">
+      <span class="product-name-text">ResearchPigeon</span>
+    </div>
     <div class="row">
       <div class="session-menu">
         <button type="button" id="session-label" class="session-menu-trigger muted" disabled>
           Checking session...
         </button>
         <div class="session-menu-panel hidden">
-          <button type="button" class="session-logout-btn">Logout?</button>
+          <button type="button" class="session-logout-btn">Logout</button>
         </div>
       </div>
       <a class="link-btn" href="/profiles">Profiles</a>
       <a class="link-btn" href="/papers">Papers</a>
-      <a class="link-btn hidden" href="/digest" data-debug-admin>Digest (Dev)</a>
+      <a class="link-btn hidden" href="/digest" data-debug-admin>Dev</a>
     </div>
   </header>
 
   <main class="container">
-    <section id="auth-gate" class="panel hidden">
-      <h1>Profiles</h1>
-      <p class="muted">Sign in to edit your profiles.</p>
-      <form id="auth-form" class="stack auth-form">
-        <label for="auth-email">Email</label>
-        <input id="auth-email" type="email" placeholder="you@example.com" required>
-        <button type="submit">Send magic link</button>
-      </form>
-      <p id="auth-status" class="status muted"></p>
-      <p id="auth-link-wrap" class="hidden">
-        Dev magic link:
-        <a id="auth-link" href="#">open profiles</a>
-      </p>
-    </section>
+    <div class="sign-in-shell">
+      <section class="hero">
+        <h1 class="product-lockup">
+          <span class="product-name-text">ResearchPigeon</span>
+          <img src="/static/logo.png" alt="" class="product-logo" width="70" height="70">
+        </h1>
+      </section>
+
+      <div class="signup-body">
+        <p class="landing-tagline mono-subtitle">Personalised daily digest for arXiv papers.</p>
+
+        <section id="auth-gate" class="panel signup-panel hidden">
+        <h2>Sign in to manage profiles</h2>
+        <form id="auth-form" class="stack">
+          <input id="auth-email" type="email" placeholder="email@example.com" required aria-label="Email">
+          <button type="submit">Send magic link</button>
+        </form>
+        <p id="auth-status" class="status"></p>
+        <p id="auth-link-wrap" class="hidden">
+          Dev magic link:
+          <a id="auth-link" href="#">open profiles</a>
+        </p>
+      </section>
+      </div>
+    </div>
 
     <section id="prefs-app" class="hidden">
       <div class="section-header">
         <h1>Profiles</h1>
         <div class="row">
-          <button id="add-profile-btn">+ Add profile</button>
           <button
             id="debug-reset-profiles-btn"
             type="button"
@@ -54,17 +69,21 @@
           >
             Hard reset profiles (debug)
           </button>
+          <button id="add-profile-btn">+ Add profile</button>
         </div>
       </div>
-      <p id="prefs-status" class="status muted"></p>
-      <section class="panel email-settings-panel">
+      <section class="panel email-settings-panel hidden">
         <label class="checkbox-row digest-emails-toggle">
           <input id="digest-emails-toggle" type="checkbox" checked>
           Enable daily digest emails
         </label>
       </section>
       <div id="profiles-grid" class="profiles-grid"></div>
-      <p class="profiles-order-tip muted">Tip: rearrange profiles to change their order in your daily digest!</p>
+      <p id="prefs-empty" class="muted prefs-empty-state hidden">
+        No profiles yet. Add your first profile!
+      </p>
+      <p id="prefs-status" class="status"></p>
+      <p class="profiles-order-tip muted hidden">Tip: rearrange profiles to change their order in your daily digest!</p>
     </section>
   </main>
 
@@ -85,9 +104,10 @@
             Active
           </label>
         </div>
-        <div class="row">
+        <div class="row profile-header-actions">
           <button class="edit-btn" type="button">Edit profile</button>
-          <button class="danger delete-btn hidden" type="button">Delete</button>
+          <button class="save-btn hidden" type="button">Save profile</button>
+          <button class="cancel-edit-btn hidden" type="button">Cancel</button>
         </div>
       </div>
 
@@ -102,16 +122,17 @@
         <p class="summary-line summary-description"></p>
       </div>
 
-      <div class="keyword-list"></div>
-
-      <button class="feedback-toggle hidden" type="button">Show papers</button>
-      <div class="feedback-panel hidden">
-        <div class="feedback-list"></div>
+      <div class="profile-form-footer">
+        <div class="keyword-list"></div>
+        <div class="row end draft-actions"></div>
       </div>
 
-      <div class="row end card-actions">
-        <button class="save-btn hidden" type="button">Save profile</button>
-        <button class="cancel-edit-btn hidden" type="button">Cancel</button>
+      <div class="profile-card-bottom">
+        <button class="feedback-toggle hidden" type="button">Show papers</button>
+        <button class="danger delete-btn hidden" type="button">Delete</button>
+      </div>
+      <div class="feedback-panel hidden">
+        <div class="feedback-list"></div>
       </div>
     </article>
   </template>

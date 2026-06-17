@@ -88,6 +88,7 @@ from core.email_settings import (
     set_digest_subscribed,
     unsubscribe_by_token,
 )
+from core.auth_messages import AUTH_SERVER_ERROR_MESSAGE
 from core.rate_limit import RateLimitExceeded, check_rate_limit
 from core.security import can_use_debug_features
 from core.paper_history import dismiss_paper
@@ -122,7 +123,7 @@ def _to_http_exception(error: Exception) -> HTTPException:
     if isinstance(error, RateLimitExceeded):
         return HTTPException(status_code=429, detail=str(error))
     if isinstance(error, psycopg.Error):
-        return HTTPException(status_code=500, detail="Database error")
+        return HTTPException(status_code=500, detail=AUTH_SERVER_ERROR_MESSAGE)
     return HTTPException(status_code=400, detail=str(error))
 
 

@@ -24,7 +24,7 @@ def test_check_rate_limit_blocks_additional_attempts():
     for _ in range(2):
         check_rate_limit("key", max_attempts=2, window_seconds=60)
 
-    with pytest.raises(RateLimitExceeded, match="rate limit exceeded"):
+    with pytest.raises(RateLimitExceeded, match="Too many sign-in attempts"):
         check_rate_limit("key", max_attempts=2, window_seconds=60)
 
 

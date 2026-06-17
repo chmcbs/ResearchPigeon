@@ -1,12 +1,9 @@
 (function () {
-  const FALLBACK_PRODUCT_NAME = "[NAME]";
+  const FALLBACK_PRODUCT_NAME = "ResearchPigeon";
 
   function applyProductName(productName) {
     const name = productName || FALLBACK_PRODUCT_NAME;
-    document.querySelectorAll(".brand").forEach(function (el) {
-      el.textContent = name;
-    });
-    document.querySelectorAll(".product-name-slot").forEach(function (el) {
+    document.querySelectorAll(".product-name-text, .product-name-slot").forEach(function (el) {
       el.textContent = name;
     });
     const suffix = document.body.getAttribute("data-document-title");
