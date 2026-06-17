@@ -9,7 +9,7 @@ from core import config
 
 def test_get_product_name_defaults_to_placeholder(monkeypatch):
     monkeypatch.delenv("PRODUCT_NAME", raising=False)
-    assert config.get_product_name() == "[NAME]"
+    assert config.get_product_name() == "ResearchPigeon"
 
 
 def test_get_product_name_uses_environment(monkeypatch):

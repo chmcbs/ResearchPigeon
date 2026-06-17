@@ -13,7 +13,7 @@ services:
     environment:
       APP_ENV: production
       APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/arxiv
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/researchpigeon
       ALLOW_DEV_MAGIC_LINK_RESPONSE: "0"
       SMTP_HOST: ${SMTP_HOST:?SMTP_HOST is required}
       SMTP_PORT: ${SMTP_PORT:-587}
@@ -30,5 +30,5 @@ services:
   worker:
     environment:
       APP_ENV: production
-      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/arxiv
+      DATABASE_URL: postgresql://postgres:${POSTGRES_PASSWORD:-postgres}@db:5432/researchpigeon
       APP_BASE_URL: http://api:8000

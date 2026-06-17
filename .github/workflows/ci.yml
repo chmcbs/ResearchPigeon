@@ -63,7 +63,7 @@ jobs:
       - name: Validate production startup configuration
         run: |
           APP_ENV=production \
-          DATABASE_URL=postgresql://postgres:postgres@db:5432/arxiv \
+          DATABASE_URL=postgresql://postgres:postgres@db:5432/researchpigeon \
           APP_BASE_URL=https://app.example.com \
           SMTP_HOST=smtp.example.com \
           EMAIL_FROM=noreply@example.com \

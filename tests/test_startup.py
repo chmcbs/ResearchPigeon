@@ -10,7 +10,7 @@ from core.startup import StartupConfigError, validate_runtime_config
 def _set_valid_production_env(monkeypatch) -> None:
     monkeypatch.setenv("APP_ENV", "production")
     monkeypatch.setenv(
-        "DATABASE_URL", "postgresql://postgres:postgres@db:5432/arxiv"
+        "DATABASE_URL", "postgresql://postgres:postgres@db:5432/researchpigeon"
     )
     monkeypatch.setenv("APP_BASE_URL", "https://app.example.com")
     monkeypatch.delenv("DISABLE_CSRF", raising=False)

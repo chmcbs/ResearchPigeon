@@ -85,7 +85,7 @@ def get_keyword_boost_cap() -> float:
 # URLs
 def get_product_name() -> str:
     raw = os.getenv("PRODUCT_NAME", "").strip()
-    return raw or "[NAME]"
+    return raw or "ResearchPigeon"
 
 
 def get_app_base_url() -> str:
@@ -279,7 +279,7 @@ def get_llm_failure_alert_threshold() -> float:
 
 # Cron monitoring
 def get_monitor_state_path() -> str:
-    return os.getenv("MONITOR_STATE_PATH", "/tmp/arxiv-monitor-state.json").strip()
+    return os.getenv("MONITOR_STATE_PATH", "/tmp/researchpigeon-monitor-state.json").strip()
 
 
 def get_monitor_alert_cooldown_s() -> int:
