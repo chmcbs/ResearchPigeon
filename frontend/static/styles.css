@@ -417,6 +417,43 @@ h1 {
   margin-top: 24px;
 }
 
+.about-panel {
+  max-width: 640px;
+  margin: 0 auto;
+}
+
+.about-panel h1 {
+  margin-top: 0;
+  margin-bottom: 10px;
+  font-size: 22px;
+  line-height: 1.3;
+  color: #111827;
+}
+
+.about-panel h2 {
+  margin-bottom: 8px;
+  font-size: 22px;
+  line-height: 1.3;
+  color: #111827;
+}
+
+.about-lead {
+  margin-top: 0;
+}
+
+.about-list {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.about-page-mono-preview .about-panel p,
+.about-page-mono-preview .about-panel li,
+.about-page-mono-preview .about-panel a {
+  font-family: var(--font-mono);
+  font-size: 0.9rem;
+  line-height: var(--font-mono-line-height);
+}
+
 .section-header {
   display: flex;
   justify-content: space-between;

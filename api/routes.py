@@ -182,6 +182,11 @@ def papers_page() -> FileResponse:
     return FileResponse(frontend_dir / "feedback.html")
 
 
+@app.get("/about", response_class=FileResponse)
+def about_page() -> FileResponse:
+    return FileResponse(frontend_dir / "about.html")
+
+
 @app.get("/validate", response_class=FileResponse)
 def validate(request: Request) -> FileResponse:
     require_debug_admin(request)
