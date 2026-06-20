@@ -206,6 +206,10 @@ def test_get_test_generation_debug_includes_ranking_metadata():
 def test_run_test_generation_runs_pipeline_and_returns_picks(monkeypatch):
     monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
     monkeypatch.setenv("DEBUG_ADMIN_EMAILS", "admin@example.com")
+    monkeypatch.setattr(
+        "api.services.test_generation.deliver_digest_email_for_user",
+        Mock(return_value={"status": "sent", "error_message": None}),
+    )
     run_pipeline = Mock(
         return_value={
             "run_ids": ["run-123"],
@@ -318,6 +322,10 @@ def test_run_test_generation_allows_zero_recommendations_when_generation_succeed
 ):
     monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
     monkeypatch.setenv("DEBUG_ADMIN_EMAILS", "admin@example.com")
+    monkeypatch.setattr(
+        "api.services.test_generation.deliver_digest_email_for_user",
+        Mock(return_value={"status": "sent", "error_message": None}),
+    )
     payload = run_test_generation_payload(
         TestGenerationRequest(
             profile_ids=["profile-1"],
