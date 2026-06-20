@@ -286,6 +286,7 @@ CREATE TABLE IF NOT EXISTS description_batches (
     succeeded INTEGER NOT NULL DEFAULT 0,
     failed INTEGER NOT NULL DEFAULT 0,
     skipped_budget INTEGER NOT NULL DEFAULT 0,
+    skipped_locked INTEGER NOT NULL DEFAULT 0,
     skipped_timeout INTEGER NOT NULL DEFAULT 0,
     skipped_validation INTEGER NOT NULL DEFAULT 0,
     total_input_tokens INTEGER NOT NULL DEFAULT 0,
@@ -293,6 +294,11 @@ CREATE TABLE IF NOT EXISTS description_batches (
     provider TEXT NOT NULL,
     model TEXT NOT NULL
 );
+"""
+
+ALTER_DESCRIPTION_BATCHES_ADD_SKIPPED_LOCKED = """
+ALTER TABLE description_batches
+ADD COLUMN IF NOT EXISTS skipped_locked INTEGER NOT NULL DEFAULT 0;
 """
 
 CREATE_DESCRIPTIONS_TABLE = """
@@ -308,6 +314,21 @@ CREATE TABLE IF NOT EXISTS descriptions (
     latency_ms INTEGER NOT NULL DEFAULT 0,
     generated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+"""
+
+CREATE_CRON_EXECUTION_WINDOWS_TABLE = """
+CREATE TABLE IF NOT EXISTS cron_execution_windows (
+    window_key TEXT PRIMARY KEY,
+    cron_run_id UUID NOT NULL,
+    started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    finished_at TIMESTAMPTZ,
+    status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed'))
+);
+"""
+
+CREATE_CRON_EXECUTION_WINDOWS_STATUS_INDEX = """
+CREATE INDEX IF NOT EXISTS cron_execution_windows_status_started_idx
+ON cron_execution_windows (status, started_at DESC);
 """
 
 
@@ -343,7 +364,10 @@ def main():
             cur.execute(CREATE_RECOMMENDATIONS_PROFILE_GENERATED_INDEX)
             cur.execute(CREATE_RECOMMENDATIONS_PROFILE_PAPER_GENERATED_INDEX)
             cur.execute(CREATE_DESCRIPTION_BATCHES_TABLE)
+            cur.execute(ALTER_DESCRIPTION_BATCHES_ADD_SKIPPED_LOCKED)
             cur.execute(CREATE_DESCRIPTIONS_TABLE)
+            cur.execute(CREATE_CRON_EXECUTION_WINDOWS_TABLE)
+            cur.execute(CREATE_CRON_EXECUTION_WINDOWS_STATUS_INDEX)
 
 
 if __name__ == "__main__":

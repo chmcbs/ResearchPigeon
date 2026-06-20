@@ -9,6 +9,8 @@ from contextlib import contextmanager
 from unittest.mock import MagicMock, Mock
 from urllib import error as urllib_error
 
+import pytest
+
 from core.descriptions import (
     LLMProviderError,
     MockLLMProvider,
@@ -29,6 +31,16 @@ from core.descriptions import (
 @contextmanager
 def _fake_scope(connection):
     yield connection
+
+
+@pytest.fixture(autouse=True)
+def _default_paper_claim(monkeypatch):
+    @contextmanager
+    def _claim(_arxiv_id: str):
+        yield True
+
+    monkeypatch.setattr("core.descriptions._paper_generation_claim", _claim)
+    monkeypatch.setattr("core.descriptions._description_exists", Mock(return_value=False))
 
 
 def test_repeats_title_detects_high_overlap():
@@ -395,6 +407,7 @@ def test_run_description_batch_stops_when_token_budget_reached(monkeypatch):
     monkeypatch.setattr("core.descriptions.get_llm_batch_timeout_s", Mock(return_value=600))
     monkeypatch.setattr("core.descriptions.get_llm_request_timeout_s", Mock(return_value=10))
     monkeypatch.setattr("core.descriptions.get_llm_batch_max_tokens", Mock(return_value=20))
+    monkeypatch.setattr("core.descriptions._estimated_tokens_per_candidate", Mock(return_value=1))
     monkeypatch.setattr(
         "core.descriptions._process_paper",
         Mock(
@@ -432,3 +445,40 @@ def test_run_description_batch_stops_when_token_budget_reached(monkeypatch):
 
     assert stats["attempted"] == 2
     assert stats["skipped_budget"] == 1
+
+
+def test_run_description_batch_counts_skipped_locked(monkeypatch):
+    candidates = [PaperCandidate("2601.20001", "Locked title", "Locked abstract", 0.95)]
+    monkeypatch.setattr("core.descriptions.fetch_paper_candidates", Mock(return_value=candidates))
+    monkeypatch.setattr("core.descriptions.get_llm_batch_concurrency", Mock(return_value=1))
+    monkeypatch.setattr("core.descriptions.get_llm_batch_timeout_s", Mock(return_value=600))
+    monkeypatch.setattr("core.descriptions.get_llm_request_timeout_s", Mock(return_value=10))
+    monkeypatch.setattr("core.descriptions.get_llm_batch_max_tokens", Mock(return_value=1000))
+    monkeypatch.setattr(
+        "core.descriptions._process_paper",
+        Mock(
+            return_value=Mock(
+                arxiv_id="2601.20001",
+                status="skipped_locked",
+                input_tokens=0,
+                output_tokens=0,
+                latency_ms=0,
+            )
+        ),
+    )
+
+    connection = MagicMock()
+    cursor = MagicMock()
+    connection.cursor.return_value.__enter__.return_value = cursor
+    monkeypatch.setattr(
+        "core.descriptions.connection_scope",
+        lambda conn=None: _fake_scope(connection),
+    )
+
+    stats = run_description_batch_for_recommendations(
+        run_ids=["run-1"],
+        provider=MockLLMProvider(),
+    )
+
+    assert stats["attempted"] == 1
+    assert stats["skipped_locked"] == 1

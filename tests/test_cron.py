@@ -14,6 +14,13 @@ from core import db as db_module
 def _monitor_defaults(monkeypatch, tmp_path):
     monkeypatch.setenv("MONITOR_STATE_PATH", str(tmp_path / "monitor-state.json"))
     monkeypatch.setenv("MONITOR_DAILY_SUMMARY_ENABLED", "0")
+    lock_conn = MagicMock()
+    monkeypatch.setattr(cron, "_open_cron_lock_connection", Mock(return_value=lock_conn))
+    monkeypatch.setattr(cron, "_acquire_cron_orchestration_lock", Mock(return_value=True))
+    monkeypatch.setattr(cron, "_release_cron_orchestration_lock", Mock())
+    monkeypatch.setattr(cron, "_claim_cron_window", Mock(return_value=True))
+    monkeypatch.setattr(cron, "_mark_cron_window_completed", Mock())
+    monkeypatch.setattr(cron, "_mark_cron_window_failed", Mock())
 
 
 def test_list_users_with_digest_selection_returns_distinct_user_ids(monkeypatch):
@@ -43,6 +50,26 @@ def test_run_daily_digest_for_all_users_skips_users_without_profiles(monkeypatch
     assert payload["users_succeeded"] == 0
     run_shared.assert_not_called()
     run_recommendations.assert_not_called()
+
+
+def test_run_daily_digest_for_all_users_skips_when_locked(monkeypatch):
+    monkeypatch.setattr(cron, "_acquire_cron_orchestration_lock", Mock(return_value=False))
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["status"] == "locked"
+    assert payload["results"] == []
+    assert payload["users_seen"] == 0
+
+
+def test_run_daily_digest_for_all_users_skips_when_window_already_ran(monkeypatch):
+    monkeypatch.setattr(cron, "_claim_cron_window", Mock(return_value=False))
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["status"] == "already-ran-window"
+    assert payload["results"] == []
+    assert payload["users_seen"] == 0
 
 
 def test_run_daily_digest_for_all_users_runs_shared_steps_once(monkeypatch):

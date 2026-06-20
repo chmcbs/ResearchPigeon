@@ -8,7 +8,9 @@ import json
 import re
 import time
 import uuid
+import psycopg
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
+from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Protocol
@@ -30,6 +32,7 @@ from core.config import (
     get_llm_request_timeout_s,
 )
 from core.db import connection_scope
+from core.db import get_database_url
 from core.arxiv_text import format_arxiv_display_text
 from core.logging import get_logger
 
@@ -69,6 +72,7 @@ INSERT INTO description_batches (
     succeeded,
     failed,
     skipped_budget,
+    skipped_locked,
     skipped_timeout,
     skipped_validation,
     total_input_tokens,
@@ -80,6 +84,7 @@ VALUES (
     %(batch_id)s,
     %(started_at)s,
     NULL,
+    0,
     0,
     0,
     0,
@@ -101,11 +106,19 @@ SET
     succeeded = %(succeeded)s,
     failed = %(failed)s,
     skipped_budget = %(skipped_budget)s,
+    skipped_locked = %(skipped_locked)s,
     skipped_timeout = %(skipped_timeout)s,
     skipped_validation = %(skipped_validation)s,
     total_input_tokens = %(total_input_tokens)s,
     total_output_tokens = %(total_output_tokens)s
 WHERE batch_id = %(batch_id)s;
+"""
+
+DESCRIPTION_EXISTS_SQL = """
+SELECT 1
+FROM descriptions
+WHERE arxiv_id = %(arxiv_id)s
+LIMIT 1;
 """
 
 INSERT_DESCRIPTION_SQL = """
@@ -542,6 +555,42 @@ def _persist_description(
 ########## BATCH EXECUTION #############
 ########################################
 
+def _estimated_tokens_per_candidate() -> int:
+    # Reserve a conservative per-paper token budget so concurrency cannot overshoot max tokens.
+    prompt_tokens = (get_llm_abstract_max_chars() // 3) + 120
+    return max(220, prompt_tokens + 80)
+
+
+def _description_exists(arxiv_id: str) -> bool:
+    with psycopg.connect(get_database_url()) as conn:
+        with conn.cursor() as cur:
+            cur.execute(DESCRIPTION_EXISTS_SQL, {"arxiv_id": arxiv_id})
+            return cur.fetchone() is not None
+
+
+@contextmanager
+def _paper_generation_claim(arxiv_id: str):
+    lock_name = f"description:{arxiv_id}"
+    acquired = False
+    with psycopg.connect(get_database_url()) as lock_conn:
+        with lock_conn.cursor() as cur:
+            cur.execute(
+                "SELECT pg_try_advisory_lock(hashtextextended(%s, 0));",
+                (lock_name,),
+            )
+            row = cur.fetchone()
+            acquired = bool(row and row[0])
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                with lock_conn.cursor() as cur:
+                    cur.execute(
+                        "SELECT pg_advisory_unlock(hashtextextended(%s, 0));",
+                        (lock_name,),
+                    )
+
+
 def _generate_with_retries(
     provider: LLMProvider,
     prompt: str,
@@ -588,6 +637,19 @@ def _process_paper(
     batch_id: str,
     request_timeout_s: float,
 ) -> PaperOutcome:
+    with _paper_generation_claim(paper.arxiv_id) as acquired:
+        if not acquired:
+            if _description_exists(paper.arxiv_id):
+                return PaperOutcome(arxiv_id=paper.arxiv_id, status="succeeded")
+            logger.info(
+                "Skipping paper because another batch is generating its description",
+                extra={
+                    "event": "llm.paper.skipped_locked",
+                    "arxiv_id": paper.arxiv_id,
+                },
+            )
+            return PaperOutcome(arxiv_id=paper.arxiv_id, status="skipped_locked")
+
     started = time.monotonic()
     total_input_tokens = 0
     total_output_tokens = 0
@@ -706,6 +768,7 @@ def run_description_batch_for_recommendations(
         "succeeded": 0,
         "failed": 0,
         "skipped_budget": 0,
+        "skipped_locked": 0,
         "skipped_timeout": 0,
         "skipped_validation": 0,
         "total_input_tokens": 0,
@@ -724,6 +787,7 @@ def run_description_batch_for_recommendations(
     batch_timeout_s = get_llm_batch_timeout_s()
     batch_max_tokens = get_llm_batch_max_tokens()
     request_timeout_s = get_llm_request_timeout_s()
+    reserved_tokens_per_candidate = _estimated_tokens_per_candidate()
 
     with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
@@ -750,7 +814,8 @@ def run_description_batch_for_recommendations(
     )
 
     pending = list(candidates)
-    active: dict[Future[PaperOutcome], PaperCandidate] = {}
+    active: dict[Future[PaperOutcome], tuple[PaperCandidate, int]] = {}
+    reserved_tokens_in_flight = 0
 
     def _record_outcome(outcome: PaperOutcome) -> None:
         stats["attempted"] += 1
@@ -760,6 +825,8 @@ def run_description_batch_for_recommendations(
             stats["succeeded"] += 1
         elif outcome.status == "failed":
             stats["failed"] += 1
+        elif outcome.status == "skipped_locked":
+            stats["skipped_locked"] += 1
         elif outcome.status == "skipped_timeout":
             stats["skipped_timeout"] += 1
         elif outcome.status == "skipped_validation":
@@ -772,7 +839,12 @@ def run_description_batch_for_recommendations(
                 for future in active:
                     future.cancel()
                 break
-            if stats["total_input_tokens"] + stats["total_output_tokens"] >= batch_max_tokens:
+            if (
+                stats["total_input_tokens"]
+                + stats["total_output_tokens"]
+                + reserved_tokens_in_flight
+                >= batch_max_tokens
+            ):
                 stats["skipped_budget"] += len(pending)
                 if pending:
                     logger.warning(
@@ -794,7 +866,9 @@ def run_description_batch_for_recommendations(
                     break
                 if (
                     stats["total_input_tokens"] + stats["total_output_tokens"]
-                    >= batch_max_tokens
+                    + reserved_tokens_in_flight
+                    + reserved_tokens_per_candidate
+                    > batch_max_tokens
                 ):
                     stats["skipped_budget"] += len(pending)
                     logger.warning(
@@ -816,7 +890,8 @@ def run_description_batch_for_recommendations(
                     batch_id=batch_id,
                     request_timeout_s=request_timeout_s,
                 )
-                active[future] = paper
+                active[future] = (paper, reserved_tokens_per_candidate)
+                reserved_tokens_in_flight += reserved_tokens_per_candidate
 
             if not active:
                 break
@@ -826,7 +901,10 @@ def run_description_batch_for_recommendations(
                 continue
 
             for future in done:
-                paper = active.pop(future)
+                paper, reserved_tokens = active.pop(future)
+                reserved_tokens_in_flight = max(
+                    0, reserved_tokens_in_flight - reserved_tokens
+                )
                 try:
                     outcome = future.result()
                 except Exception as error:
@@ -853,6 +931,7 @@ def run_description_batch_for_recommendations(
                     "succeeded": stats["succeeded"],
                     "failed": stats["failed"],
                     "skipped_budget": stats["skipped_budget"],
+                    "skipped_locked": stats["skipped_locked"],
                     "skipped_timeout": stats["skipped_timeout"],
                     "skipped_validation": stats["skipped_validation"],
                     "total_input_tokens": stats["total_input_tokens"],
