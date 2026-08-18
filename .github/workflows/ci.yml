@@ -76,6 +76,7 @@ jobs:
           APP_BASE_URL: https://app.example.com
           SMTP_HOST: smtp.example.com
           EMAIL_FROM: noreply@example.com
+          EMAIL_UNSUBSCRIBE_SECRET: test-unsubscribe-secret-thirty-two-chars
         run: |
           # .env is gitignored; compose still references it via env_file.
           touch .env
