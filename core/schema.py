@@ -337,8 +337,14 @@ CREATE TABLE IF NOT EXISTS cron_execution_windows (
     cron_run_id UUID NOT NULL,
     started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     finished_at TIMESTAMPTZ,
-    status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed'))
+    status TEXT NOT NULL CHECK (status IN ('running', 'completed', 'failed')),
+    shared_run_ids TEXT[]
 );
+"""
+
+ALTER_CRON_EXECUTION_WINDOWS_ADD_SHARED_RUN_IDS = """
+ALTER TABLE cron_execution_windows
+ADD COLUMN IF NOT EXISTS shared_run_ids TEXT[];
 """
 
 CREATE_CRON_EXECUTION_WINDOWS_STATUS_INDEX = """
@@ -399,6 +405,7 @@ def main():
             cur.execute(ALTER_DESCRIPTION_BATCHES_ADD_SKIPPED_LOCKED)
             cur.execute(CREATE_DESCRIPTIONS_TABLE)
             cur.execute(CREATE_CRON_EXECUTION_WINDOWS_TABLE)
+            cur.execute(ALTER_CRON_EXECUTION_WINDOWS_ADD_SHARED_RUN_IDS)
             cur.execute(CREATE_CRON_EXECUTION_WINDOWS_STATUS_INDEX)
             cur.execute(CREATE_DIGEST_SENDS_TABLE)
             cur.execute(CREATE_DIGEST_SENDS_WINDOW_INDEX)

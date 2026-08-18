@@ -12,7 +12,7 @@ from core.logging import configure_logging, get_logger
 from core.descriptions import run_description_batch_for_recommendations
 from core.pipeline_progress import set_step
 from core.profiles import categories_for_profile_ids, get_profile
-from core.recommendations import generate_recommendations
+from core.recommendations import generate_recommendations, has_recommendations
 
 logger = get_logger(__name__)
 
@@ -112,6 +112,7 @@ def run_shared_pipeline_steps(
     categories: list[str] | None = None,
     max_results: int | None = None,
     embedding_limit: int | None = None,
+    existing_run_ids: list[str] | None = None,
 ) -> dict:
     configure_logging()
     resolved_max_results = (
@@ -121,28 +122,41 @@ def run_shared_pipeline_steps(
         get_embedding_limit() if embedding_limit is None else embedding_limit
     )
 
-    set_step("ingestion")
-    logger.info(
-        "Running ingestion",
-        extra={
-            "event": "pipeline.step.started",
-            "step": "ingestion",
-            "max_results": resolved_max_results,
-        },
-    )
-    run_ids = run_ingestion(
-        categories=categories,
-        max_results=resolved_max_results,
-    )
-    logger.info(
-        "Ingestion finished",
-        extra={
-            "event": "pipeline.step.completed",
-            "step": "ingestion",
-            "run_count": len(run_ids),
-            "run_ids": run_ids,
-        },
-    )
+    if existing_run_ids is not None:
+        run_ids = list(existing_run_ids)
+        logger.info(
+            "Reusing ingestion runs from earlier in this digest day",
+            extra={
+                "event": "pipeline.step.skipped",
+                "step": "ingestion",
+                "reason": "existing_run_ids",
+                "run_count": len(run_ids),
+                "run_ids": run_ids,
+            },
+        )
+    else:
+        set_step("ingestion")
+        logger.info(
+            "Running ingestion",
+            extra={
+                "event": "pipeline.step.started",
+                "step": "ingestion",
+                "max_results": resolved_max_results,
+            },
+        )
+        run_ids = run_ingestion(
+            categories=categories,
+            max_results=resolved_max_results,
+        )
+        logger.info(
+            "Ingestion finished",
+            extra={
+                "event": "pipeline.step.completed",
+                "step": "ingestion",
+                "run_count": len(run_ids),
+                "run_ids": run_ids,
+            },
+        )
 
     set_step("embeddings")
     logger.info(
@@ -216,6 +230,24 @@ def run_recommendations_for_profiles(
         for run_id in matching_run_ids:
             recommendations_by_run_profile.setdefault(run_id, {})
             recommendation_status_by_run_profile.setdefault(run_id, {})
+            if has_recommendations(run_id, target_profile_id):
+                recommendations_by_run_profile[run_id][target_profile_id] = []
+                recommendation_status_by_run_profile[run_id][target_profile_id] = {
+                    "status": "succeeded",
+                    "recommendation_count": None,
+                    "error_message": None,
+                }
+                logger.info(
+                    "Reusing recommendations already ranked for this run",
+                    extra={
+                        "event": "pipeline.step.skipped",
+                        "step": "recommendations",
+                        "reason": "already_ranked",
+                        "run_id": run_id,
+                        "profile_id": target_profile_id,
+                    },
+                )
+                continue
             try:
                 recommendations = _generate_recommendations_with_retries(
                     run_id,

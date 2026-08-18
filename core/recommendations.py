@@ -8,12 +8,13 @@ from dataclasses import dataclass
 import psycopg
 
 from core.config import get_daily_picks_k, get_keyword_boost_cap
-from core.db import get_database_url
+from core.db import connection_scope, get_database_url
 from core.profiles import require_profile_id
 from core.recommendations_sql import (
     DELETE_EXISTING_SQL,
     FETCH_EFFECTIVE_K_SQL,
     FETCH_RUN_SQL,
+    HAS_RECOMMENDATIONS_SQL,
     INSERT_RECOMMENDATION_SQL,
     RANK_CANDIDATES_SQL,
 )
@@ -54,6 +55,13 @@ def _ensure_rankable_run(cur, run_id: str) -> tuple[str, str, int]:
     if row is None:
         raise ValueError(f"Run {run_id} must exist and be completed or failed")
     return str(row[0]), str(row[1]), int(row[2])
+
+
+def has_recommendations(run_id: str, profile_id: str, conn=None) -> bool:
+    with connection_scope(conn) as active_conn:
+        with active_conn.cursor() as cur:
+            cur.execute(HAS_RECOMMENDATIONS_SQL, (run_id, profile_id))
+            return cur.fetchone() is not None
 
 
 # Rank papers for a completed or failed run and persist as recommendations

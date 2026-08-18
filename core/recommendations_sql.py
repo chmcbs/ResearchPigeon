@@ -248,6 +248,14 @@ FROM ranked
 ORDER BY rank ASC;
 """
 
+HAS_RECOMMENDATIONS_SQL = """
+SELECT 1
+FROM recommendations
+WHERE run_id = %s
+  AND profile_id = %s
+LIMIT 1;
+"""
+
 DELETE_EXISTING_SQL = """
 DELETE FROM recommendations
 WHERE run_id = %s

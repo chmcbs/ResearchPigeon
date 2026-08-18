@@ -74,6 +74,7 @@ def _patch_category_matching(
         ),
     )
     monkeypatch.setattr(pipeline, "get_profile", Mock(side_effect=mock_get_profile))
+    monkeypatch.setattr(pipeline, "has_recommendations", Mock(return_value=False))
 
 
 def test_run_pipeline_calls_steps_in_order(monkeypatch):
@@ -281,5 +282,40 @@ def test_empty_unseen_pool_is_success_not_failure(monkeypatch):
         "recommendation_count": 0,
         "error_message": None,
     }
+    assert pipeline.all_recommendation_attempts_failed(summary) is False
+
+
+def test_run_shared_pipeline_steps_skips_ingestion_when_run_ids_already_exist(
+    monkeypatch,
+):
+    monkeypatch.setattr(pipeline, "run_ingestion", Mock(return_value=["new-run"]))
+    monkeypatch.setattr(pipeline, "run_embeddings", Mock(return_value=2))
+
+    summary = pipeline.run_shared_pipeline_steps(
+        existing_run_ids=["run-from-crash"],
+        embedding_limit=50,
+    )
+
+    pipeline.run_ingestion.assert_not_called()
+    pipeline.run_embeddings.assert_called_once_with(limit=50)
+    assert summary == {"run_ids": ["run-from-crash"], "embedded_count": 2}
+
+
+def test_run_recommendations_reuses_existing_ranks(monkeypatch):
+    _patch_category_matching(monkeypatch)
+    monkeypatch.setattr(pipeline, "has_recommendations", Mock(return_value=True))
+    generate = Mock(return_value=[{"rank": 1}])
+    monkeypatch.setattr(pipeline, "generate_recommendations", generate)
+
+    summary = pipeline.run_recommendations_for_profiles(
+        user_id="default",
+        profile_ids=["profile-1"],
+        run_ids=["run-1"],
+    )
+
+    generate.assert_not_called()
+    assert summary["recommendation_status_by_run_profile"]["run-1"]["profile-1"][
+        "status"
+    ] == "succeeded"
     assert pipeline.all_recommendation_attempts_failed(summary) is False
 

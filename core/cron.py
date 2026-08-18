@@ -79,6 +79,19 @@ WHERE cron_execution_windows.status IN ('failed', 'running')
 RETURNING window_key;
 """
 
+GET_WINDOW_SHARED_RUN_IDS_SQL = """
+SELECT shared_run_ids
+FROM cron_execution_windows
+WHERE window_key = %(window_key)s;
+"""
+
+SET_WINDOW_SHARED_RUN_IDS_SQL = """
+UPDATE cron_execution_windows
+SET shared_run_ids = %(run_ids)s
+WHERE window_key = %(window_key)s
+  AND cron_run_id = %(cron_run_id)s::uuid;
+"""
+
 GET_DIGEST_SEND_OUTCOME_SQL = """
 SELECT outcome
 FROM digest_sends
@@ -101,6 +114,7 @@ ON CONFLICT (user_id, window_key) DO NOTHING;
 """
 
 TERMINAL_DIGEST_SEND_OUTCOMES = frozenset({"sent", "skipped_empty"})
+TERMINAL_EMAIL_STATUSES = frozenset({"sent", "skipped_no_picks"})
 
 COMPLETE_CRON_WINDOW_SQL = """
 UPDATE cron_execution_windows
@@ -246,6 +260,51 @@ def _claim_cron_window(*, lock_conn, window_key: str, cron_run_id: str, started_
         row = cur.fetchone()
     lock_conn.commit()
     return bool(row)
+
+
+def _get_window_shared_run_ids(*, lock_conn, window_key: str) -> list[str] | None:
+    with lock_conn.cursor() as cur:
+        cur.execute(GET_WINDOW_SHARED_RUN_IDS_SQL, {"window_key": window_key})
+        row = cur.fetchone()
+    if row is None or row[0] is None:
+        return None
+    return [str(run_id) for run_id in row[0]]
+
+
+def _set_window_shared_run_ids(
+    *,
+    lock_conn,
+    window_key: str,
+    cron_run_id: str,
+    run_ids: list[str],
+) -> None:
+    with lock_conn.cursor() as cur:
+        cur.execute(
+            SET_WINDOW_SHARED_RUN_IDS_SQL,
+            {
+                "window_key": window_key,
+                "cron_run_id": cron_run_id,
+                "run_ids": run_ids,
+            },
+        )
+    lock_conn.commit()
+
+
+def _digest_window_still_owed(
+    *,
+    users_to_process: list[tuple[str, list[str]]],
+    results: list[dict],
+) -> bool:
+    if not users_to_process:
+        return False
+    by_user = {entry["user_id"]: entry for entry in results}
+    for user_id, _profile_ids in users_to_process:
+        entry = by_user.get(user_id)
+        if entry is None or entry.get("status") == "failed":
+            return True
+        if entry.get("email_status") not in TERMINAL_EMAIL_STATUSES:
+            return True
+    return False
 
 
 def _mark_cron_window_completed(*, lock_conn, window_key: str, cron_run_id: str) -> None:
@@ -501,11 +560,29 @@ def run_daily_digest_for_all_users(
         if users_to_process:
             try:
                 ingest_categories = list_digest_categories(conn=conn)
-                shared = run_shared_pipeline_steps(
-                    categories=ingest_categories,
-                    max_results=resolved_max_results,
-                    embedding_limit=resolved_embedding_limit,
+                existing_run_ids = _get_window_shared_run_ids(
+                    lock_conn=lock_conn,
+                    window_key=window_key,
                 )
+                if existing_run_ids is not None:
+                    shared = run_shared_pipeline_steps(
+                        categories=ingest_categories,
+                        max_results=resolved_max_results,
+                        embedding_limit=resolved_embedding_limit,
+                        existing_run_ids=existing_run_ids,
+                    )
+                else:
+                    shared = run_shared_pipeline_steps(
+                        categories=ingest_categories,
+                        max_results=resolved_max_results,
+                        embedding_limit=resolved_embedding_limit,
+                    )
+                    _set_window_shared_run_ids(
+                        lock_conn=lock_conn,
+                        window_key=window_key,
+                        cron_run_id=cron_run_id,
+                        run_ids=shared["run_ids"],
+                    )
                 shared_run_ids = shared["run_ids"]
             except Exception as error:
                 message = str(error).strip() or error.__class__.__name__
@@ -763,11 +840,21 @@ def run_daily_digest_for_all_users(
             run_ids=shared_run_ids,
         )
         _save_monitor_state_safely(monitor_state)
-        _mark_cron_window_completed(
-            lock_conn=lock_conn,
-            window_key=window_key,
-            cron_run_id=cron_run_id,
-        )
+        if _digest_window_still_owed(
+            users_to_process=users_to_process,
+            results=results,
+        ):
+            _mark_cron_window_failed(
+                lock_conn=lock_conn,
+                window_key=window_key,
+                cron_run_id=cron_run_id,
+            )
+        else:
+            _mark_cron_window_completed(
+                lock_conn=lock_conn,
+                window_key=window_key,
+                cron_run_id=cron_run_id,
+            )
         return payload
     except Exception:
         if window_claimed:

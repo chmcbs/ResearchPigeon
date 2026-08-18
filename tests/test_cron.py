@@ -25,6 +25,8 @@ def _monitor_defaults(monkeypatch, tmp_path):
     monkeypatch.setattr(cron, "_acquire_cron_orchestration_lock", Mock(return_value=True))
     monkeypatch.setattr(cron, "_release_cron_orchestration_lock", Mock())
     monkeypatch.setattr(cron, "_claim_cron_window", Mock(return_value=True))
+    monkeypatch.setattr(cron, "_get_window_shared_run_ids", Mock(return_value=None))
+    monkeypatch.setattr(cron, "_set_window_shared_run_ids", Mock())
     monkeypatch.setattr(cron, "_mark_cron_window_completed", Mock())
     monkeypatch.setattr(cron, "_mark_cron_window_failed", Mock())
     monkeypatch.setattr(cron, "get_digest_send_outcome", Mock(return_value=None))
@@ -131,6 +133,9 @@ def test_run_daily_digest_for_all_users_runs_shared_steps_once(monkeypatch):
     assert payload["results"][0]["email_status"] == "sent"
     assert payload["results"][1]["email_status"] == "sent"
     cron.wait_until_digest_send_time.assert_called_once()
+    cron._mark_cron_window_completed.assert_called_once()
+    cron._mark_cron_window_failed.assert_not_called()
+    cron._set_window_shared_run_ids.assert_called_once()
 
 
 def test_run_daily_digest_for_all_users_marks_users_failed_when_shared_steps_fail(
@@ -350,6 +355,9 @@ def test_run_daily_digest_retries_failed_email_delivery(monkeypatch):
 
 def test_claim_cron_window_sql_reclaims_failed_or_running_rows():
     assert "status IN ('failed', 'running')" in cron.CLAIM_CRON_WINDOW_SQL
+    update_sql = cron.CLAIM_CRON_WINDOW_SQL.split("DO UPDATE", 1)[1]
+    set_sql = update_sql.split("WHERE", 1)[0]
+    assert "shared_run_ids" not in set_sql
 
 
 def test_claim_cron_window_returns_true_when_row_returned(monkeypatch):
@@ -513,6 +521,8 @@ def test_run_daily_digest_does_not_record_failed_email(monkeypatch):
 
     assert payload["results"][0]["email_status"] == "failed"
     cron.record_digest_send_outcome.assert_not_called()
+    cron._mark_cron_window_failed.assert_called_once()
+    cron._mark_cron_window_completed.assert_not_called()
 
 
 def test_run_daily_digest_does_not_record_unconfigured_email(monkeypatch):
@@ -687,6 +697,8 @@ def test_run_daily_digest_treats_all_failed_picks_as_user_failure(monkeypatch):
     assert payload["users_succeeded"] == 0
     deliver_email.assert_not_called()
     cron.wait_until_digest_send_time.assert_not_called()
+    cron._mark_cron_window_failed.assert_called_once()
+    cron._mark_cron_window_completed.assert_not_called()
 
 
 def test_run_daily_digest_sends_when_some_topics_succeed(monkeypatch):
@@ -733,5 +745,77 @@ def test_run_daily_digest_sends_when_some_topics_succeed(monkeypatch):
     assert payload["users_succeeded"] == 1
     deliver_email.assert_called_once()
     cron.wait_until_digest_send_time.assert_called_once()
+    cron._mark_cron_window_completed.assert_called_once()
+
+
+def test_run_daily_digest_reuses_stored_run_ids_on_leftover_day(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "_get_window_shared_run_ids",
+        Mock(return_value=["run-from-crash"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    run_shared = Mock(return_value={"run_ids": ["run-from-crash"], "embedded_count": 0})
+    monkeypatch.setattr(cron, "run_shared_pipeline_steps", run_shared)
+    monkeypatch.setattr(cron, "run_recommendations_for_profiles", Mock())
+    monkeypatch.setattr(
+        cron,
+        "run_description_batch_for_recommendations",
+        Mock(return_value={"attempted": 0}),
+    )
+    deliver_email = Mock(return_value={"status": "sent", "error_message": None})
+    monkeypatch.setattr(cron, "deliver_digest_email_for_user", deliver_email)
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    run_shared.assert_called_once_with(
+        categories=["cs.AI"],
+        max_results=150,
+        embedding_limit=600,
+        existing_run_ids=["run-from-crash"],
+    )
+    cron._set_window_shared_run_ids.assert_not_called()
+    deliver_email.assert_called_once()
+    assert payload["results"][0]["run_ids"] == ["run-from-crash"]
+    cron._mark_cron_window_completed.assert_called_once()
+
+
+def test_digest_window_still_owed_when_email_or_picks_fail():
+    users = [("user-1", ["profile-1"])]
+    assert cron._digest_window_still_owed(
+        users_to_process=users,
+        results=[{"user_id": "user-1", "status": "failed"}],
+    )
+    assert cron._digest_window_still_owed(
+        users_to_process=users,
+        results=[
+            {
+                "user_id": "user-1",
+                "status": "succeeded",
+                "email_status": "failed",
+            }
+        ],
+    )
+    assert not cron._digest_window_still_owed(
+        users_to_process=users,
+        results=[
+            {
+                "user_id": "user-1",
+                "status": "succeeded",
+                "email_status": "sent",
+            }
+        ],
+    )
+    assert not cron._digest_window_still_owed(users_to_process=[], results=[])
 
 

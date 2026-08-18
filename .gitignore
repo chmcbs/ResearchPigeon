@@ -6,4 +6,4 @@ __pycache__/
 .ruff_cache/
 README.md
 sql/
-DEPLOY.md
+DAILY_DIGEST.md
