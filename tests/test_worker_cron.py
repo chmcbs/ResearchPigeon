@@ -11,7 +11,7 @@ def test_worker_cron_main_calls_core_runner_and_prints_payload(monkeypatch, caps
     monkeypatch.setattr(
         run_daily_cron,
         "run_daily_digest_for_all_users",
-        Mock(return_value={"users_seen": 1, "users_succeeded": 1}),
+        Mock(return_value={"users_seen": 1, "users_ranked": 1, "emails_sent": 1}),
     )
 
     exit_code = run_daily_cron.main()

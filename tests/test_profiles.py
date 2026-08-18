@@ -2,6 +2,7 @@
 Tests user profile helpers
 """
 
+from contextlib import contextmanager
 from unittest.mock import MagicMock, Mock
 
 import pytest
@@ -335,6 +336,29 @@ def test_update_profile_updates_name_category_and_digest(monkeypatch):
         "p-1",
         "user-1",
     )
+
+
+def test_list_digest_categories_sql_excludes_unsubscribed_users():
+    sql = profiles.LIST_DIGEST_CATEGORIES_SQL
+    assert "user_email_settings" in sql
+    assert "digest_subscribed" in sql
+    assert "digest_enabled = TRUE" in sql
+
+
+def test_list_digest_categories_returns_distinct_categories(monkeypatch):
+    cursor = MagicMock()
+    cursor.fetchall.return_value = [("cs.AI",), ("cs.LG",)]
+    connection = MagicMock()
+    connection.cursor.return_value.__enter__.return_value = cursor
+
+    @contextmanager
+    def fake_scope(conn=None):
+        yield connection
+
+    monkeypatch.setattr(profiles, "connection_scope", fake_scope)
+
+    assert profiles.list_digest_categories() == ["cs.AI", "cs.LG"]
+    assert cursor.execute.call_args.args[0] == profiles.LIST_DIGEST_CATEGORIES_SQL
 
 
 def test_delete_profile_returns_false_when_missing(monkeypatch):

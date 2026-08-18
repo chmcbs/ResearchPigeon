@@ -140,10 +140,12 @@ WHERE user_id = %s
 """
 
 LIST_DIGEST_CATEGORIES_SQL = """
-SELECT DISTINCT category
-FROM user_profiles
-WHERE digest_enabled = TRUE
-ORDER BY category ASC;
+SELECT DISTINCT up.category
+FROM user_profiles up
+LEFT JOIN user_email_settings ues ON ues.user_id = up.user_id
+WHERE up.digest_enabled = TRUE
+  AND COALESCE(ues.digest_subscribed, TRUE) = TRUE
+ORDER BY up.category ASC;
 """
 
 LIST_USER_PROFILE_IDS_FOR_UPDATE_SQL = """

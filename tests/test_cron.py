@@ -58,7 +58,8 @@ def test_run_daily_digest_for_all_users_skips_users_without_profiles(monkeypatch
 
     assert payload["users_seen"] == 1
     assert payload["users_skipped"] == 1
-    assert payload["users_succeeded"] == 0
+    assert payload["users_ranked"] == 0
+    assert payload["emails_sent"] == 0
     run_shared.assert_not_called()
     run_recommendations.assert_not_called()
 
@@ -71,6 +72,10 @@ def test_run_daily_digest_for_all_users_skips_when_locked(monkeypatch):
     assert payload["status"] == "locked"
     assert payload["results"] == []
     assert payload["users_seen"] == 0
+    assert payload["users_ranked"] == 0
+    assert payload["emails_sent"] == 0
+    assert payload["emails_empty"] == 0
+    assert payload["emails_failed"] == 0
 
 
 def test_run_daily_digest_for_all_users_skips_when_window_already_ran(monkeypatch):
@@ -106,7 +111,10 @@ def test_run_daily_digest_for_all_users_runs_shared_steps_once(monkeypatch):
 
     payload = cron.run_daily_digest_for_all_users()
 
-    assert payload["users_succeeded"] == 2
+    assert payload["users_ranked"] == 2
+    assert payload["emails_sent"] == 2
+    assert payload["emails_empty"] == 0
+    assert payload["emails_failed"] == 0
     run_shared.assert_called_once_with(
         categories=["cs.AI"],
         max_results=150,
@@ -163,7 +171,7 @@ def test_run_daily_digest_for_all_users_marks_users_failed_when_shared_steps_fai
     payload = cron.run_daily_digest_for_all_users()
 
     assert payload["users_failed"] == 2
-    assert payload["users_succeeded"] == 0
+    assert payload["users_ranked"] == 0
     run_recommendations.assert_not_called()
     assert payload["results"][0]["error_message"] == "ingestion failed"
 
@@ -204,7 +212,7 @@ def test_run_daily_digest_for_all_users_alerts_admin_when_blurb_batch_fails(
 
     payload = cron.run_daily_digest_for_all_users()
 
-    assert payload["users_succeeded"] == 1
+    assert payload["users_ranked"] == 1
     assert payload["description_batch"] == {}
     deliver_user_email.assert_called_once()
     send_admin_alert.assert_called_once()
@@ -250,7 +258,7 @@ def test_run_daily_digest_for_all_users_skips_alert_when_no_admin_recipients(
 
     payload = cron.run_daily_digest_for_all_users()
 
-    assert payload["users_succeeded"] == 1
+    assert payload["users_ranked"] == 1
     send_admin_alert.assert_not_called()
 
 
@@ -303,7 +311,7 @@ def test_run_daily_digest_for_all_users_alerts_when_failure_threshold_exceeded(
 
     payload = cron.run_daily_digest_for_all_users()
 
-    assert payload["users_succeeded"] == 1
+    assert payload["users_ranked"] == 1
     send_admin_alert.assert_called_once()
     message = send_admin_alert.call_args.args[0]
     assert "LLM blurb quality degraded" in message["Subject"]
@@ -411,7 +419,7 @@ def test_run_daily_digest_skips_users_already_sent_today(monkeypatch):
     payload = cron.run_daily_digest_for_all_users()
 
     assert payload["users_skipped"] == 1
-    assert payload["users_succeeded"] == 1
+    assert payload["users_ranked"] == 1
     assert payload["results"][0]["email_status"] == "skipped_already_sent"
     assert payload["results"][0]["error_message"] == "already sent today"
     run_recommendations.assert_called_once_with(
@@ -480,6 +488,10 @@ def test_run_daily_digest_records_empty_skip(monkeypatch):
     payload = cron.run_daily_digest_for_all_users()
 
     assert payload["results"][0]["email_status"] == "skipped_no_picks"
+    assert payload["users_ranked"] == 1
+    assert payload["emails_sent"] == 0
+    assert payload["emails_empty"] == 1
+    assert payload["emails_failed"] == 0
     cron.record_digest_send_outcome.assert_called_once_with(
         user_id="user-1",
         window_key=cron._cron_window_key(datetime.fromisoformat(payload["started_at"])),
@@ -520,6 +532,9 @@ def test_run_daily_digest_does_not_record_failed_email(monkeypatch):
     payload = cron.run_daily_digest_for_all_users()
 
     assert payload["results"][0]["email_status"] == "failed"
+    assert payload["users_ranked"] == 1
+    assert payload["emails_sent"] == 0
+    assert payload["emails_failed"] == 1
     cron.record_digest_send_outcome.assert_not_called()
     cron._mark_cron_window_failed.assert_called_once()
     cron._mark_cron_window_completed.assert_not_called()
@@ -557,6 +572,9 @@ def test_run_daily_digest_does_not_record_unconfigured_email(monkeypatch):
     payload = cron.run_daily_digest_for_all_users()
 
     assert payload["results"][0]["email_status"] == "skipped_unconfigured"
+    assert payload["users_ranked"] == 1
+    assert payload["emails_sent"] == 0
+    assert payload["emails_failed"] == 1
     cron.record_digest_send_outcome.assert_not_called()
 
 
@@ -694,7 +712,7 @@ def test_run_daily_digest_treats_all_failed_picks_as_user_failure(monkeypatch):
     payload = cron.run_daily_digest_for_all_users()
 
     assert payload["users_failed"] == 1
-    assert payload["users_succeeded"] == 0
+    assert payload["users_ranked"] == 0
     deliver_email.assert_not_called()
     cron.wait_until_digest_send_time.assert_not_called()
     cron._mark_cron_window_failed.assert_called_once()
@@ -742,7 +760,7 @@ def test_run_daily_digest_sends_when_some_topics_succeed(monkeypatch):
 
     payload = cron.run_daily_digest_for_all_users()
 
-    assert payload["users_succeeded"] == 1
+    assert payload["users_ranked"] == 1
     deliver_email.assert_called_once()
     cron.wait_until_digest_send_time.assert_called_once()
     cron._mark_cron_window_completed.assert_called_once()
@@ -817,6 +835,32 @@ def test_digest_window_still_owed_when_email_or_picks_fail():
         ],
     )
     assert not cron._digest_window_still_owed(users_to_process=[], results=[])
+
+
+def test_cron_progress_counts_split_ranking_from_email_outcomes():
+    results = [
+        {"email_status": "sent"},
+        {"email_status": "skipped_no_picks"},
+        {"email_status": "failed"},
+        {"email_status": "skipped_unconfigured"},
+        {"status": "skipped"},
+    ]
+
+    assert cron._cron_progress_counts(
+        users_seen=5,
+        users_ranked=4,
+        users_failed=0,
+        users_skipped=1,
+        results=results,
+    ) == {
+        "users_seen": 5,
+        "users_ranked": 4,
+        "users_failed": 0,
+        "users_skipped": 1,
+        "emails_sent": 1,
+        "emails_empty": 1,
+        "emails_failed": 2,
+    }
 
 
 def test_load_monitor_state_resets_corrupt_file(tmp_path, caplog):

@@ -340,6 +340,42 @@ def _mark_cron_window_failed(*, lock_conn, window_key: str, cron_run_id: str) ->
     lock_conn.commit()
 
 
+def _email_outcome_counts(results: list[dict]) -> dict[str, int]:
+    emails_sent = 0
+    emails_empty = 0
+    emails_failed = 0
+    for row in results:
+        status = row.get("email_status")
+        if status == "sent":
+            emails_sent += 1
+        elif status == "skipped_no_picks":
+            emails_empty += 1
+        elif status in {"failed", "skipped_unconfigured"}:
+            emails_failed += 1
+    return {
+        "emails_sent": emails_sent,
+        "emails_empty": emails_empty,
+        "emails_failed": emails_failed,
+    }
+
+
+def _cron_progress_counts(
+    *,
+    users_seen: int,
+    users_ranked: int,
+    users_failed: int,
+    users_skipped: int,
+    results: list[dict],
+) -> dict[str, int]:
+    return {
+        "users_seen": users_seen,
+        "users_ranked": users_ranked,
+        "users_failed": users_failed,
+        "users_skipped": users_skipped,
+        **_email_outcome_counts(results),
+    }
+
+
 def _skipped_cron_payload(
     *,
     cron_run_id: str,
@@ -351,10 +387,13 @@ def _skipped_cron_payload(
         "cron_run_id": cron_run_id,
         "started_at": started_at.isoformat(),
         "duration_s": int(time.monotonic() - started_monotonic),
-        "users_seen": 0,
-        "users_succeeded": 0,
-        "users_failed": 0,
-        "users_skipped": 0,
+        **_cron_progress_counts(
+            users_seen=0,
+            users_ranked=0,
+            users_failed=0,
+            users_skipped=0,
+            results=[],
+        ),
         "description_batch": {},
         "results": [],
         "status": reason,
@@ -515,7 +554,7 @@ def run_daily_digest_for_all_users(
         )
         user_ids = list_users_with_digest_selection(conn=conn)
         results: list[dict] = []
-        succeeded = 0
+        ranked = 0
         failed = 0
         skipped = 0
         users_to_process: list[tuple[str, list[str]]] = []
@@ -623,10 +662,13 @@ def run_daily_digest_for_all_users(
                     "cron_run_id": cron_run_id,
                     "started_at": started_at.isoformat(),
                     "duration_s": int(time.monotonic() - started_monotonic),
-                    "users_seen": len(user_ids),
-                    "users_succeeded": succeeded,
-                    "users_failed": failed,
-                    "users_skipped": skipped,
+                    **_cron_progress_counts(
+                        users_seen=len(user_ids),
+                        users_ranked=ranked,
+                        users_failed=failed,
+                        users_skipped=skipped,
+                        results=results,
+                    ),
                     "description_batch": {},
                     "results": results,
                 }
@@ -655,7 +697,7 @@ def run_daily_digest_for_all_users(
                 )
                 if all_recommendation_attempts_failed(rec_summary):
                     raise RuntimeError("all recommendation attempts failed")
-                succeeded += 1
+                ranked += 1
                 results.append(
                     {
                         "user_id": user_id,
@@ -801,9 +843,15 @@ def run_daily_digest_for_all_users(
                 run_ids=shared_run_ids,
             )
 
-        sent_count = sum(1 for row in results if row.get("email_status") == "sent")
+        progress_counts = _cron_progress_counts(
+            users_seen=len(user_ids),
+            users_ranked=ranked,
+            users_failed=failed,
+            users_skipped=skipped,
+            results=results,
+        )
         processed_count = len(users_to_process)
-        had_zero_output = processed_count > 0 and sent_count == 0
+        had_zero_output = processed_count > 0 and progress_counts["emails_sent"] == 0
         if had_zero_output:
             monitor_state["zero_output_streak"] = int(
                 monitor_state.get("zero_output_streak") or 0
@@ -826,10 +874,7 @@ def run_daily_digest_for_all_users(
             "cron_run_id": cron_run_id,
             "started_at": started_at.isoformat(),
             "duration_s": duration_s,
-            "users_seen": len(user_ids),
-            "users_succeeded": succeeded,
-            "users_failed": failed,
-            "users_skipped": skipped,
+            **progress_counts,
             "description_batch": description_batch,
             "results": results,
         }
@@ -1184,9 +1229,12 @@ def _maybe_send_daily_summary(
         f"Cron run ID: {payload.get('cron_run_id')}\n"
         f"Run IDs: {', '.join(run_ids) if run_ids else 'none'}\n"
         f"Users seen: {payload.get('users_seen')}\n"
-        f"Users succeeded: {payload.get('users_succeeded')}\n"
+        f"Users ranked: {payload.get('users_ranked')}\n"
         f"Users failed: {payload.get('users_failed')}\n"
         f"Users skipped: {payload.get('users_skipped')}\n"
+        f"Emails sent: {payload.get('emails_sent')}\n"
+        f"Emails empty: {payload.get('emails_empty')}\n"
+        f"Emails failed: {payload.get('emails_failed')}\n"
         f"Duration: {payload.get('duration_s')}s\n"
         f"Zero-output streak: {monitor_state.get('zero_output_streak')}\n"
         f"Log path: {_monitor_log_path_label()}\n"
