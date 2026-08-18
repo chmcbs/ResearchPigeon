@@ -29,11 +29,13 @@ from core.config import (
     is_email_delivery_configured,
     is_monitor_daily_summary_enabled,
 )
+from core.cron_schedule import LONDON_TZ, wait_until_digest_send_time
 from core.pipeline import run_recommendations_for_profiles, run_shared_pipeline_steps
 from core.descriptions import run_description_batch_for_recommendations
 from core.digest_email import deliver_digest_email_for_user
 from core.email import deliver_email_message
 from core.profiles import list_digest_categories, list_digest_selected_profile_ids
+from core.startup import StartupConfigError, validate_runtime_config
 
 logger = get_logger(__name__)
 
@@ -223,7 +225,8 @@ def _release_cron_orchestration_lock(lock_conn) -> None:
 
 
 def _cron_window_key(started_at: datetime) -> str:
-    return f"daily-digest:{started_at.date().isoformat()}"
+    london_date = started_at.astimezone(LONDON_TZ).date()
+    return f"daily-digest:{london_date.isoformat()}"
 
 
 def _claim_cron_window(*, lock_conn, window_key: str, cron_run_id: str, started_at: datetime) -> bool:
@@ -385,12 +388,31 @@ def run_daily_digest_for_all_users(
     cron_run_id = str(uuid.uuid4())
     started_at = datetime.now(UTC)
     started_monotonic = time.monotonic()
-    lock_conn = _open_cron_lock_connection()
+    lock_conn = None
     lock_acquired = False
     window_claimed = False
     window_key = _cron_window_key(started_at)
 
     try:
+        try:
+            validate_runtime_config()
+        except StartupConfigError as error:
+            logger.error(
+                "Daily digest cron skipped because production config is unsafe",
+                extra={
+                    "event": "cron.daily_digest.unsafe_config",
+                    "cron_run_id": cron_run_id,
+                    "error": str(error).strip() or error.__class__.__name__,
+                },
+            )
+            return _skipped_cron_payload(
+                cron_run_id=cron_run_id,
+                started_at=started_at,
+                started_monotonic=started_monotonic,
+                reason="unsafe-config",
+            )
+
+        lock_conn = _open_cron_lock_connection()
         lock_acquired = _acquire_cron_orchestration_lock(lock_conn)
         if not lock_acquired:
             return _skipped_cron_payload(
@@ -654,10 +676,13 @@ def run_daily_digest_for_all_users(
                         cron_run_id=cron_run_id,
                     )
 
-        if shared_run_ids:
-            for entry in results:
-                if entry.get("status") != "succeeded":
-                    continue
+        work_duration_s = int(time.monotonic() - started_monotonic)
+        pending_email = [
+            entry for entry in results if entry.get("status") == "succeeded"
+        ]
+        if shared_run_ids and pending_email:
+            wait_until_digest_send_time()
+            for entry in pending_email:
                 email_result = _deliver_digest_email_with_retries(
                     monitor_state=monitor_state,
                     cron_run_id=cron_run_id,
@@ -675,7 +700,7 @@ def run_daily_digest_for_all_users(
                     conn=conn,
                 )
 
-        duration_s = int(time.monotonic() - started_monotonic)
+        duration_s = work_duration_s
         runtime_warning_threshold_s = get_monitor_cron_runtime_warning_s()
         if duration_s > runtime_warning_threshold_s:
             _notify_admins_of_runtime_warning(
@@ -747,9 +772,10 @@ def run_daily_digest_for_all_users(
             )
         raise
     finally:
-        if lock_acquired:
+        if lock_acquired and lock_conn is not None:
             _release_cron_orchestration_lock(lock_conn)
-        lock_conn.close()
+        if lock_conn is not None:
+            lock_conn.close()
 
 
 ########################################

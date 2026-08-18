@@ -19,3 +19,25 @@ def test_worker_cron_main_calls_core_runner_and_prints_payload(monkeypatch, caps
 
     assert exit_code == 0
     assert "users_seen" in captured.out
+
+
+def test_worker_cron_main_returns_error_when_config_is_unsafe(monkeypatch, capsys):
+    monkeypatch.setattr(
+        run_daily_cron,
+        "run_daily_digest_for_all_users",
+        Mock(return_value={"status": "unsafe-config"}),
+    )
+
+    assert run_daily_cron.main() == 1
+    assert "unsafe-config" in capsys.readouterr().out
+
+
+def test_worker_cron_main_returns_error_when_runner_raises(monkeypatch):
+    monkeypatch.setattr(
+        run_daily_cron,
+        "run_daily_digest_for_all_users",
+        Mock(side_effect=RuntimeError("db down")),
+    )
+
+    assert run_daily_cron.main() == 1
+

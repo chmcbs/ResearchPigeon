@@ -29,6 +29,7 @@ def _monitor_defaults(monkeypatch, tmp_path):
     monkeypatch.setattr(cron, "_mark_cron_window_failed", Mock())
     monkeypatch.setattr(cron, "get_digest_send_outcome", Mock(return_value=None))
     monkeypatch.setattr(cron, "record_digest_send_outcome", Mock())
+    monkeypatch.setattr(cron, "wait_until_digest_send_time", Mock())
 
 
 def test_list_users_with_digest_selection_returns_distinct_user_ids(monkeypatch):
@@ -129,6 +130,7 @@ def test_run_daily_digest_for_all_users_runs_shared_steps_once(monkeypatch):
     assert deliver_email.call_count == 2
     assert payload["results"][0]["email_status"] == "sent"
     assert payload["results"][1]["email_status"] == "sent"
+    cron.wait_until_digest_send_time.assert_called_once()
 
 
 def test_run_daily_digest_for_all_users_marks_users_failed_when_shared_steps_fail(
@@ -601,4 +603,49 @@ def test_record_digest_send_outcome_rejects_non_terminal_values():
             window_key="daily-digest:2026-08-18",
             outcome="failed",
         )
+
+
+def test_run_daily_digest_skips_when_production_config_is_unsafe(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "validate_runtime_config",
+        Mock(side_effect=cron.StartupConfigError("APP_BASE_URL must use https")),
+    )
+    open_lock = Mock()
+    monkeypatch.setattr(cron, "_open_cron_lock_connection", open_lock)
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["status"] == "unsafe-config"
+    open_lock.assert_not_called()
+    cron.wait_until_digest_send_time.assert_not_called()
+
+
+def test_run_daily_digest_does_not_wait_to_send_when_nobody_succeeded(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(
+        cron,
+        "run_shared_pipeline_steps",
+        Mock(side_effect=RuntimeError("ingestion failed")),
+    )
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["users_failed"] == 1
+    cron.wait_until_digest_send_time.assert_not_called()
+
+
+def test_cron_window_key_uses_london_date():
+    started_at = datetime(2026, 8, 18, 3, 0, tzinfo=UTC)
+    assert cron._cron_window_key(started_at) == "daily-digest:2026-08-18"
 
