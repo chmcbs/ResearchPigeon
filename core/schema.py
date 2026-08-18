@@ -331,6 +331,21 @@ CREATE INDEX IF NOT EXISTS cron_execution_windows_status_started_idx
 ON cron_execution_windows (status, started_at DESC);
 """
 
+CREATE_DIGEST_SENDS_TABLE = """
+CREATE TABLE IF NOT EXISTS digest_sends (
+    user_id TEXT NOT NULL,
+    window_key TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('sent', 'skipped_empty')),
+    recorded_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, window_key)
+);
+"""
+
+CREATE_DIGEST_SENDS_WINDOW_INDEX = """
+CREATE INDEX IF NOT EXISTS digest_sends_window_outcome_idx
+ON digest_sends (window_key, outcome);
+"""
+
 
 def main():
     with psycopg.connect(get_database_url()) as conn:
@@ -368,6 +383,8 @@ def main():
             cur.execute(CREATE_DESCRIPTIONS_TABLE)
             cur.execute(CREATE_CRON_EXECUTION_WINDOWS_TABLE)
             cur.execute(CREATE_CRON_EXECUTION_WINDOWS_STATUS_INDEX)
+            cur.execute(CREATE_DIGEST_SENDS_TABLE)
+            cur.execute(CREATE_DIGEST_SENDS_WINDOW_INDEX)
 
 
 if __name__ == "__main__":

@@ -69,9 +69,32 @@ SET
     started_at = EXCLUDED.started_at,
     finished_at = NULL,
     status = 'running'
-WHERE cron_execution_windows.status = 'failed'
+WHERE cron_execution_windows.status IN ('failed', 'running')
 RETURNING window_key;
 """
+
+GET_DIGEST_SEND_OUTCOME_SQL = """
+SELECT outcome
+FROM digest_sends
+WHERE user_id = %(user_id)s
+  AND window_key = %(window_key)s;
+"""
+
+INSERT_DIGEST_SEND_OUTCOME_SQL = """
+INSERT INTO digest_sends (
+    user_id,
+    window_key,
+    outcome
+)
+VALUES (
+    %(user_id)s,
+    %(window_key)s,
+    %(outcome)s
+)
+ON CONFLICT (user_id, window_key) DO NOTHING;
+"""
+
+TERMINAL_DIGEST_SEND_OUTCOMES = frozenset({"sent", "skipped_empty"})
 
 COMPLETE_CRON_WINDOW_SQL = """
 UPDATE cron_execution_windows
@@ -282,6 +305,76 @@ def list_users_with_digest_selection(conn=None) -> list[str]:
     return [row[0] for row in rows]
 
 
+def get_digest_send_outcome(
+    *,
+    user_id: str,
+    window_key: str,
+    conn=None,
+) -> str | None:
+    with connection_scope(conn) as active_conn:
+        with active_conn.cursor() as cur:
+            cur.execute(
+                GET_DIGEST_SEND_OUTCOME_SQL,
+                {"user_id": user_id, "window_key": window_key},
+            )
+            row = cur.fetchone()
+    if row is None:
+        return None
+    outcome = str(row[0] or "").strip()
+    return outcome or None
+
+
+def record_digest_send_outcome(
+    *,
+    user_id: str,
+    window_key: str,
+    outcome: str,
+    conn=None,
+) -> None:
+    if outcome not in TERMINAL_DIGEST_SEND_OUTCOMES:
+        raise ValueError(f"unsupported digest send outcome: {outcome}")
+    with connection_scope(conn) as active_conn:
+        with active_conn.cursor() as cur:
+            cur.execute(
+                INSERT_DIGEST_SEND_OUTCOME_SQL,
+                {
+                    "user_id": user_id,
+                    "window_key": window_key,
+                    "outcome": outcome,
+                },
+            )
+
+
+def _terminal_digest_send_skip_message(outcome: str) -> str:
+    if outcome == "sent":
+        return "already sent today"
+    if outcome == "skipped_empty":
+        return "already skipped empty today"
+    return f"already recorded today ({outcome})"
+
+
+def _record_digest_send_from_email_result(
+    *,
+    user_id: str,
+    window_key: str,
+    email_status: str,
+    conn=None,
+) -> None:
+    outcome = None
+    if email_status == "sent":
+        outcome = "sent"
+    elif email_status == "skipped_no_picks":
+        outcome = "skipped_empty"
+    if outcome is None:
+        return
+    record_digest_send_outcome(
+        user_id=user_id,
+        window_key=window_key,
+        outcome=outcome,
+        conn=conn,
+    )
+
+
 def run_daily_digest_for_all_users(
     *,
     max_results: int | None = None,
@@ -345,6 +438,25 @@ def run_daily_digest_for_all_users(
         )
 
         for user_id in user_ids:
+            prior_outcome = get_digest_send_outcome(
+                user_id=user_id,
+                window_key=window_key,
+                conn=conn,
+            )
+            if prior_outcome in TERMINAL_DIGEST_SEND_OUTCOMES:
+                skipped += 1
+                results.append(
+                    {
+                        "user_id": user_id,
+                        "status": "skipped",
+                        "profile_ids": [],
+                        "email_status": f"skipped_already_{prior_outcome}",
+                        "error_message": _terminal_digest_send_skip_message(
+                            prior_outcome
+                        ),
+                    }
+                )
+                continue
             profile_ids = list_digest_selected_profile_ids(user_id=user_id, conn=conn)
             if not profile_ids:
                 skipped += 1
@@ -556,6 +668,12 @@ def run_daily_digest_for_all_users(
                 )
                 entry["email_status"] = email_result["status"]
                 entry["email_error"] = email_result["error_message"]
+                _record_digest_send_from_email_result(
+                    user_id=entry["user_id"],
+                    window_key=window_key,
+                    email_status=str(email_result.get("status") or ""),
+                    conn=conn,
+                )
 
         duration_s = int(time.monotonic() - started_monotonic)
         runtime_warning_threshold_s = get_monitor_cron_runtime_warning_s()

@@ -2,12 +2,18 @@
 Tests scheduled digest cron helpers
 """
 
+from contextlib import contextmanager
+from datetime import UTC, datetime
 from unittest.mock import MagicMock, Mock
 
 import pytest
 
 from core import cron
 from core import db as db_module
+
+_REAL_CLAIM_CRON_WINDOW = cron._claim_cron_window
+_REAL_GET_DIGEST_SEND_OUTCOME = cron.get_digest_send_outcome
+_REAL_RECORD_DIGEST_SEND_OUTCOME = cron.record_digest_send_outcome
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +27,8 @@ def _monitor_defaults(monkeypatch, tmp_path):
     monkeypatch.setattr(cron, "_claim_cron_window", Mock(return_value=True))
     monkeypatch.setattr(cron, "_mark_cron_window_completed", Mock())
     monkeypatch.setattr(cron, "_mark_cron_window_failed", Mock())
+    monkeypatch.setattr(cron, "get_digest_send_outcome", Mock(return_value=None))
+    monkeypatch.setattr(cron, "record_digest_send_outcome", Mock())
 
 
 def test_list_users_with_digest_selection_returns_distinct_user_ids(monkeypatch):
@@ -330,3 +338,267 @@ def test_run_daily_digest_retries_failed_email_delivery(monkeypatch):
 
     assert deliver_email.call_count == 2
     assert payload["results"][0]["email_status"] == "sent"
+    cron.record_digest_send_outcome.assert_called_once_with(
+        user_id="user-1",
+        window_key=cron._cron_window_key(datetime.fromisoformat(payload["started_at"])),
+        outcome="sent",
+        conn=None,
+    )
+
+
+def test_claim_cron_window_sql_reclaims_failed_or_running_rows():
+    assert "status IN ('failed', 'running')" in cron.CLAIM_CRON_WINDOW_SQL
+
+
+def test_claim_cron_window_returns_true_when_row_returned(monkeypatch):
+    monkeypatch.setattr(cron, "_claim_cron_window", _REAL_CLAIM_CRON_WINDOW)
+    cursor = MagicMock()
+    cursor.fetchone.return_value = ("daily-digest:2026-08-18",)
+    lock_conn = MagicMock()
+    lock_conn.cursor.return_value.__enter__.return_value = cursor
+
+    claimed = cron._claim_cron_window(
+        lock_conn=lock_conn,
+        window_key="daily-digest:2026-08-18",
+        cron_run_id="11111111-1111-1111-1111-111111111111",
+        started_at=datetime(2026, 8, 18, tzinfo=UTC),
+    )
+
+    assert claimed is True
+    lock_conn.commit.assert_called_once()
+    assert "status IN ('failed', 'running')" in cursor.execute.call_args.args[0]
+
+
+def test_run_daily_digest_skips_users_already_sent_today(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1", "user-2"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "get_digest_send_outcome",
+        Mock(side_effect=["sent", None]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-2"]),
+    )
+    run_shared = Mock(return_value={"run_ids": ["run-shared"], "embedded_count": 1})
+    run_recommendations = Mock()
+    deliver_email = Mock(return_value={"status": "sent", "error_message": None})
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(cron, "run_shared_pipeline_steps", run_shared)
+    monkeypatch.setattr(cron, "run_recommendations_for_profiles", run_recommendations)
+    monkeypatch.setattr(
+        cron,
+        "run_description_batch_for_recommendations",
+        Mock(return_value={"attempted": 0}),
+    )
+    monkeypatch.setattr(cron, "deliver_digest_email_for_user", deliver_email)
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["users_skipped"] == 1
+    assert payload["users_succeeded"] == 1
+    assert payload["results"][0]["email_status"] == "skipped_already_sent"
+    assert payload["results"][0]["error_message"] == "already sent today"
+    run_recommendations.assert_called_once_with(
+        user_id="user-2",
+        profile_ids=["profile-2"],
+        run_ids=["run-shared"],
+    )
+    deliver_email.assert_called_once()
+    cron.record_digest_send_outcome.assert_called_once_with(
+        user_id="user-2",
+        window_key=cron._cron_window_key(datetime.fromisoformat(payload["started_at"])),
+        outcome="sent",
+        conn=None,
+    )
+
+
+def test_run_daily_digest_skips_shared_pipeline_when_all_users_already_recorded(
+    monkeypatch,
+):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(cron, "get_digest_send_outcome", Mock(return_value="skipped_empty"))
+    run_shared = Mock()
+    monkeypatch.setattr(cron, "run_shared_pipeline_steps", run_shared)
+    monkeypatch.setattr(cron, "run_recommendations_for_profiles", Mock())
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["users_skipped"] == 1
+    assert payload["results"][0]["error_message"] == "already skipped empty today"
+    run_shared.assert_not_called()
+
+
+def test_run_daily_digest_records_empty_skip(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(
+        cron,
+        "run_shared_pipeline_steps",
+        Mock(return_value={"run_ids": ["run-shared"], "embedded_count": 0}),
+    )
+    monkeypatch.setattr(cron, "run_recommendations_for_profiles", Mock())
+    monkeypatch.setattr(
+        cron,
+        "run_description_batch_for_recommendations",
+        Mock(return_value={"attempted": 0}),
+    )
+    monkeypatch.setattr(
+        cron,
+        "deliver_digest_email_for_user",
+        Mock(return_value={"status": "skipped_no_picks", "error_message": None}),
+    )
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["results"][0]["email_status"] == "skipped_no_picks"
+    cron.record_digest_send_outcome.assert_called_once_with(
+        user_id="user-1",
+        window_key=cron._cron_window_key(datetime.fromisoformat(payload["started_at"])),
+        outcome="skipped_empty",
+        conn=None,
+    )
+
+
+def test_run_daily_digest_does_not_record_failed_email(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(
+        cron,
+        "run_shared_pipeline_steps",
+        Mock(return_value={"run_ids": ["run-shared"], "embedded_count": 0}),
+    )
+    monkeypatch.setattr(cron, "run_recommendations_for_profiles", Mock())
+    monkeypatch.setattr(
+        cron,
+        "run_description_batch_for_recommendations",
+        Mock(return_value={"attempted": 0}),
+    )
+    monkeypatch.setattr(
+        cron,
+        "deliver_digest_email_for_user",
+        Mock(return_value={"status": "failed", "error_message": "smtp timeout"}),
+    )
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["results"][0]["email_status"] == "failed"
+    cron.record_digest_send_outcome.assert_not_called()
+
+
+def test_run_daily_digest_does_not_record_unconfigured_email(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(
+        cron,
+        "run_shared_pipeline_steps",
+        Mock(return_value={"run_ids": ["run-shared"], "embedded_count": 0}),
+    )
+    monkeypatch.setattr(cron, "run_recommendations_for_profiles", Mock())
+    monkeypatch.setattr(
+        cron,
+        "run_description_batch_for_recommendations",
+        Mock(return_value={"attempted": 0}),
+    )
+    monkeypatch.setattr(
+        cron,
+        "deliver_digest_email_for_user",
+        Mock(return_value={"status": "skipped_unconfigured", "error_message": None}),
+    )
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["results"][0]["email_status"] == "skipped_unconfigured"
+    cron.record_digest_send_outcome.assert_not_called()
+
+
+def test_get_digest_send_outcome_returns_stored_value(monkeypatch):
+    monkeypatch.setattr(cron, "get_digest_send_outcome", _REAL_GET_DIGEST_SEND_OUTCOME)
+    cursor = MagicMock()
+    cursor.fetchone.return_value = ("sent",)
+    connection = MagicMock()
+    connection.cursor.return_value.__enter__.return_value = cursor
+
+    @contextmanager
+    def fake_scope(conn=None):
+        yield connection
+
+    monkeypatch.setattr(cron, "connection_scope", fake_scope)
+
+    assert (
+        cron.get_digest_send_outcome(
+            user_id="user@example.com",
+            window_key="daily-digest:2026-08-18",
+        )
+        == "sent"
+    )
+
+
+def test_record_digest_send_outcome_inserts_terminal_row(monkeypatch):
+    monkeypatch.setattr(
+        cron, "record_digest_send_outcome", _REAL_RECORD_DIGEST_SEND_OUTCOME
+    )
+    cursor = MagicMock()
+    connection = MagicMock()
+    connection.cursor.return_value.__enter__.return_value = cursor
+
+    @contextmanager
+    def fake_scope(conn=None):
+        yield connection
+
+    monkeypatch.setattr(cron, "connection_scope", fake_scope)
+
+    cron.record_digest_send_outcome(
+        user_id="user@example.com",
+        window_key="daily-digest:2026-08-18",
+        outcome="skipped_empty",
+    )
+
+    assert cursor.execute.call_args.args[0] == cron.INSERT_DIGEST_SEND_OUTCOME_SQL
+    assert cursor.execute.call_args.args[1]["outcome"] == "skipped_empty"
+
+
+def test_record_digest_send_outcome_rejects_non_terminal_values():
+    with pytest.raises(ValueError, match="unsupported digest send outcome"):
+        _REAL_RECORD_DIGEST_SEND_OUTCOME(
+            user_id="user@example.com",
+            window_key="daily-digest:2026-08-18",
+            outcome="failed",
+        )
+
