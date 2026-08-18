@@ -126,6 +126,41 @@ def test_magic_link_redirect_allows_debug_paths_for_admin(monkeypatch):
     assert "csrf_token=" in response.headers["set-cookie"]
 
 
+def test_digest_login_redirect_rejects_unlisted_paths(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "get_auth_session_payload",
+        Mock(
+            return_value={
+                "authenticated": False,
+                "user_id": None,
+                "email": None,
+                "can_debug_access": False,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "verify_digest_login_payload",
+        Mock(
+            return_value={
+                "verified": True,
+                "session_id": "session-123",
+                "user_id": "x@example.com",
+                "email": "x@example.com",
+            }
+        ),
+    )
+    client = TestClient(routes.app)
+    response = client.get(
+        "/auth/digest-login?token=abc&next=https://evil.example",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/profiles"
+
+
 def test_magic_link_redirect_rejects_digest_for_non_admin(monkeypatch):
     monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
     monkeypatch.setenv("DEBUG_ADMIN_EMAILS", "admin@example.com")
@@ -492,11 +527,13 @@ def test_auth_session_exposes_can_debug_access_for_admin(monkeypatch):
         ),
     )
     client = TestClient(routes.app)
+    client.cookies.set("session_id", "session-admin")
 
     response = client.get("/auth/session")
 
     assert response.status_code == 200
     assert response.json()["can_debug_access"] is True
+    assert "session_id=session-admin" in response.headers["set-cookie"]
 
 
 def test_security_headers_are_present(monkeypatch):

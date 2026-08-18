@@ -35,3 +35,16 @@ def verify_magic_link_payload(
         "user_id": user_id,
         "email": email,
     }
+
+
+def verify_digest_login_payload(
+    token: str,
+    login_from_digest_token: Callable[[str], tuple[str, str, str]],
+) -> dict:
+    session_id, user_id, email = login_from_digest_token(token)
+    return {
+        "verified": True,
+        "session_id": session_id,
+        "user_id": user_id,
+        "email": email,
+    }

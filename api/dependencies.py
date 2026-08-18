@@ -26,6 +26,7 @@ from api.schemas import (
 )
 from api.services.auth import (
     request_magic_link_payload as request_magic_link_payload_service,
+    verify_digest_login_payload as verify_digest_login_payload_service,
     verify_magic_link_payload as verify_magic_link_payload_service,
 )
 from api.services.common import resolve_profile
@@ -64,6 +65,8 @@ from api.unit_of_work import ApiUnitOfWork, open_api_unit_of_work
 from core.auth import (
     create_magic_link,
     get_session_user,
+    login_from_digest_token,
+    refresh_session,
     revoke_session,
     verify_magic_link,
 )
@@ -182,6 +185,14 @@ def _enforce_magic_link_verify_limit(client_ip: str) -> None:
     )
 
 
+def _enforce_digest_login_verify_limit(client_ip: str) -> None:
+    check_rate_limit(
+        f"digest-login-verify:ip:{client_ip}",
+        max_attempts=get_magic_link_verify_limit_per_ip(),
+        window_seconds=get_rate_limit_window_seconds(),
+    )
+
+
 def _enforce_test_generation_limit(user_id: str) -> None:
     check_rate_limit(
         f"test-generation:user:{user_id.strip().lower()}",
@@ -244,6 +255,25 @@ def verify_magic_link_payload(
         raise _to_http_exception(error) from error
 
 
+def verify_digest_login_payload(
+    token: str,
+    client_ip: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    try:
+        _enforce_digest_login_verify_limit(client_ip)
+        with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+            return verify_digest_login_payload_service(
+                token=token,
+                login_from_digest_token=lambda value: login_from_digest_token(
+                    token=value, conn=active_uow.conn
+                ),
+            )
+    except ValueError as error:
+        raise _to_http_exception(error) from error
+
+
 def logout_payload(session_id: str | None, conn=None) -> dict:
     if session_id:
         with open_api_unit_of_work(conn=conn) as active_uow:
@@ -258,6 +288,8 @@ def get_auth_session_payload(
 ) -> dict:
     with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
         resolved = get_session_user(session_id=session_id or "", conn=active_uow.conn)
+        if resolved is not None:
+            refresh_session(session_id=session_id or "", conn=active_uow.conn)
     if resolved is None:
         return {
             "authenticated": False,

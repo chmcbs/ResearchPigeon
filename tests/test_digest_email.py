@@ -93,7 +93,7 @@ def test_build_digest_email_body_includes_picks_stars_category_and_footer(monkey
         )
     ]
 
-    body = build_digest_email_body(sections)
+    body = build_digest_email_body(sections, login_token="digest-token")
 
     assert "ML Papers · cs.LG" in body
     assert "1. Sample Paper" in body
@@ -101,8 +101,8 @@ def test_build_digest_email_body_includes_picks_stars_category_and_footer(monkey
     assert "   ⭐⭐⭐" in body
     assert "% match" not in body
     assert "https://arxiv.org/pdf/2601.00001" in body
-    assert "Rate papers: http://localhost:8000/papers" in body
-    assert "Manage preferences: http://localhost:8000/profiles" in body
+    assert "Rate papers: http://localhost:8000/auth/digest-login?token=digest-token&next=%2Fpapers" in body
+    assert "Manage preferences: http://localhost:8000/auth/digest-login?token=digest-token&next=%2Fprofiles" in body
     assert "Unsubscribe: http://localhost:8000/email/unsubscribe" in body
     assert "Papers are sourced from arXiv.org" in body
     assert body.index("Papers are sourced from arXiv.org") < body.index(
@@ -128,15 +128,21 @@ def test_build_digest_email_html_matches_preview_layout(monkeypatch):
         )
     ]
 
-    html = build_digest_email_html(sections)
+    html = build_digest_email_html(sections, login_token="digest-token")
 
     assert ">cs.LG</td>" in html
     assert "Sample Paper" in html
     assert "Adds a new training trick." in html
     assert "⭐⭐⭐" in html
-    assert 'href="http://localhost:8000/papers"' in html
+    assert (
+        'href="http://localhost:8000/auth/digest-login?token=digest-token&amp;next=%2Fpapers"'
+        in html
+    )
     assert "Rate papers" in html
-    assert 'href="http://localhost:8000/profiles"' in html
+    assert (
+        'href="http://localhost:8000/auth/digest-login?token=digest-token&amp;next=%2Fprofiles"'
+        in html
+    )
     assert "Manage preferences" in html
     assert "Unsubscribe from digest emails" in html
     assert html.index("Rate papers") < html.index("Manage preferences")
@@ -255,6 +261,10 @@ def test_deliver_digest_email_for_user_sends_when_picks_exist(monkeypatch):
         "core.digest_email.build_unsubscribe_url",
         Mock(return_value="http://localhost:8000/email/unsubscribe?token=abc"),
     )
+    monkeypatch.setattr(
+        "core.digest_email.create_digest_login_token",
+        Mock(return_value=("digest-token", "reader@example.com")),
+    )
     send = Mock()
     monkeypatch.setattr("core.digest_email.send_digest_email", send)
 
@@ -267,8 +277,14 @@ def test_deliver_digest_email_for_user_sends_when_picks_exist(monkeypatch):
     assert result == {"status": "sent", "error_message": None}
     send.assert_called_once()
     assert send.call_args.kwargs["to_email"] == "reader@example.com"
-    assert "plain_body" in send.call_args.kwargs
-    assert "html_body" in send.call_args.kwargs
+    assert (
+        "Rate papers: http://localhost:8000/auth/digest-login?token=digest-token&next=%2Fpapers"
+        in send.call_args.kwargs["plain_body"]
+    )
+    assert (
+        "/auth/digest-login?token=digest-token&amp;next=%2Fpapers"
+        in send.call_args.kwargs["html_body"]
+    )
 
 
 def test_deliver_digest_email_for_user_can_redirect_to_admin_without_changing_content(
@@ -298,6 +314,10 @@ def test_deliver_digest_email_for_user_can_redirect_to_admin_without_changing_co
     monkeypatch.setattr(
         "core.digest_email.build_unsubscribe_url",
         Mock(return_value="http://localhost:8000/email/unsubscribe?token=abc"),
+    )
+    monkeypatch.setattr(
+        "core.digest_email.create_digest_login_token",
+        Mock(return_value=("digest-token", "reader@example.com")),
     )
     send = Mock()
     monkeypatch.setattr("core.digest_email.send_digest_email", send)
@@ -341,6 +361,10 @@ def test_deliver_digest_email_for_user_logs_failure_without_raising(monkeypatch)
     monkeypatch.setattr(
         "core.digest_email.build_unsubscribe_url",
         Mock(return_value="http://localhost:8000/email/unsubscribe?token=abc"),
+    )
+    monkeypatch.setattr(
+        "core.digest_email.create_digest_login_token",
+        Mock(return_value=("digest-token", "reader@example.com")),
     )
     monkeypatch.setattr(
         "core.digest_email.send_digest_email",

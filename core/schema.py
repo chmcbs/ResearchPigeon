@@ -217,6 +217,21 @@ CREATE INDEX IF NOT EXISTS auth_sessions_user_idx
 ON auth_sessions (user_id, created_at DESC);
 """
 
+CREATE_DIGEST_LOGIN_TOKENS_TABLE = """
+CREATE TABLE IF NOT EXISTS digest_login_tokens (
+    token_hash TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL,
+    email TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+"""
+
+CREATE_DIGEST_LOGIN_TOKENS_USER_INDEX = """
+CREATE INDEX IF NOT EXISTS digest_login_tokens_user_idx
+ON digest_login_tokens (user_id, created_at DESC);
+"""
+
 
 CREATE_USER_EMAIL_SETTINGS_TABLE = """
 CREATE TABLE IF NOT EXISTS user_email_settings (
@@ -368,6 +383,8 @@ def main():
             cur.execute(CREATE_MAGIC_LINK_TOKENS_TABLE)
             cur.execute(CREATE_AUTH_SESSIONS_TABLE)
             cur.execute(CREATE_AUTH_SESSIONS_USER_INDEX)
+            cur.execute(CREATE_DIGEST_LOGIN_TOKENS_TABLE)
+            cur.execute(CREATE_DIGEST_LOGIN_TOKENS_USER_INDEX)
             cur.execute(CREATE_USER_EMAIL_SETTINGS_TABLE)
             cur.execute(CREATE_PAPER_FEEDBACK_TABLE)
             cur.execute(CREATE_PAPER_FEEDBACK_PROFILE_PAPER_INDEX)

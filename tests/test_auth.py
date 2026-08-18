@@ -105,6 +105,66 @@ def test_get_session_user_returns_tuple(monkeypatch):
     assert auth.get_session_user("session") == ("u@example.com", "u@example.com")
 
 
+def test_create_digest_login_token_replaces_previous_tokens(monkeypatch):
+    monkeypatch.setattr(auth.secrets, "token_urlsafe", lambda _: "digest-token")
+    cursor = MagicMock()
+    monkeypatch.setattr(db_module.psycopg, "connect", _mock_connection_with_cursor(cursor))
+
+    token, user_id = auth.create_digest_login_token("  User@Example.com ")
+
+    assert token == "digest-token"
+    assert user_id == "user@example.com"
+    executed_sql = [call.args[0] for call in cursor.execute.call_args_list]
+    assert any(
+        "DELETE FROM digest_login_tokens" in sql and "user_id" in sql
+        for sql in executed_sql
+    )
+    insert_params = cursor.execute.call_args_list[2].args[1]
+    assert insert_params[1] == "user@example.com"
+    assert insert_params[2] == "user@example.com"
+
+
+def test_login_from_digest_token_does_not_kick_other_devices(monkeypatch):
+    monkeypatch.setattr(auth.secrets, "token_urlsafe", lambda _: "session-123")
+    cursor = MagicMock()
+    cursor.fetchone.return_value = ("user@example.com", "user@example.com")
+    monkeypatch.setattr(db_module.psycopg, "connect", _mock_connection_with_cursor(cursor))
+
+    session_id, user_id, email = auth.login_from_digest_token("digest-token")
+
+    assert session_id == "session-123"
+    assert user_id == "user@example.com"
+    assert email == "user@example.com"
+    executed_sql = [call.args[0] for call in cursor.execute.call_args_list]
+    assert executed_sql[0] == auth.FETCH_DIGEST_TOKEN_SQL
+    assert "consumed_at" not in executed_sql[0]
+    assert not any(
+        "DELETE FROM auth_sessions" in sql and "user_id" in sql for sql in executed_sql
+    )
+    insert_params = cursor.execute.call_args_list[2].args[1]
+    assert insert_params[0] == "session-123"
+
+
+def test_login_from_digest_token_rejects_missing_token(monkeypatch):
+    cursor = MagicMock()
+    cursor.fetchone.return_value = None
+    monkeypatch.setattr(db_module.psycopg, "connect", _mock_connection_with_cursor(cursor))
+
+    with pytest.raises(ValueError, match="sign-in link is invalid"):
+        auth.login_from_digest_token("bad-token")
+
+
+def test_refresh_session_updates_expiry(monkeypatch):
+    cursor = MagicMock()
+    cursor.rowcount = 1
+    monkeypatch.setattr(db_module.psycopg, "connect", _mock_connection_with_cursor(cursor))
+
+    assert auth.refresh_session("session-123") is True
+    refresh_sql, refresh_params = cursor.execute.call_args.args
+    assert refresh_sql == auth.REFRESH_SESSION_SQL
+    assert refresh_params[1] == "session-123"
+
+
 def test_request_magic_link_payload_sends_email_when_dev_flag_disabled():
     sent: list[tuple[str, str]] = []
 

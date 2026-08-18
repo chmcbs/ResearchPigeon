@@ -354,6 +354,70 @@ def test_magic_link_verify_supports_safe_next_redirect_for_admin(monkeypatch):
     assert response.headers["location"] == "/digest"
 
 
+def test_digest_login_sets_session_cookie_when_logged_out(monkeypatch):
+    monkeypatch.setattr(
+        routes,
+        "get_auth_session_payload",
+        Mock(
+            return_value={
+                "authenticated": False,
+                "user_id": None,
+                "email": None,
+                "can_debug_access": False,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "verify_digest_login_payload",
+        Mock(
+            return_value={
+                "verified": True,
+                "session_id": "session-digest",
+                "user_id": "reader@example.com",
+                "email": "reader@example.com",
+            }
+        ),
+    )
+    client = TestClient(routes.app)
+    response = client.get(
+        "/auth/digest-login?token=abc&next=/papers",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/papers"
+    assert "session_id=session-digest" in response.headers["set-cookie"]
+
+
+def test_digest_login_keeps_existing_session(monkeypatch):
+    verify = Mock()
+    monkeypatch.setattr(
+        routes,
+        "get_auth_session_payload",
+        Mock(
+            return_value={
+                "authenticated": True,
+                "user_id": "reader@example.com",
+                "email": "reader@example.com",
+                "can_debug_access": False,
+            }
+        ),
+    )
+    monkeypatch.setattr(routes, "verify_digest_login_payload", verify)
+    client = TestClient(routes.app)
+    client.cookies.set("session_id", "existing-session")
+    response = client.get(
+        "/auth/digest-login?token=abc&next=/papers",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/papers"
+    assert "session_id=existing-session" in response.headers["set-cookie"]
+    verify.assert_not_called()
+
+
 def test_email_unsubscribe_redirects_to_preferences(monkeypatch):
     monkeypatch.setattr(
         routes,

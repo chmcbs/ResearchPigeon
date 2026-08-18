@@ -38,6 +38,7 @@ from api.dependencies import (
     update_email_settings_payload,
     reorder_profiles_payload,
     update_profile_payload,
+    verify_digest_login_payload,
     verify_magic_link_payload,
     _client_ip,
 )
@@ -278,6 +279,33 @@ def auth_verify_magic_link(
     return response
 
 
+@app.get("/auth/digest-login")
+def auth_digest_login(
+    token: str,
+    request: Request,
+    next: str = "/profiles",
+) -> RedirectResponse:
+    existing_session_id = request.cookies.get("session_id")
+    existing = get_auth_session_payload(existing_session_id)
+    if existing["authenticated"] and existing_session_id:
+        redirect_target = resolve_safe_redirect_path(next, email=existing["email"])
+        response = RedirectResponse(url=redirect_target, status_code=302)
+        response.headers["Cache-Control"] = "no-store"
+        response.headers["Pragma"] = "no-cache"
+        _set_session_cookie(response, existing_session_id)
+        _ensure_authenticated_csrf(response, request, True)
+        return response
+
+    payload = verify_digest_login_payload(token=token, client_ip=_client_ip(request))
+    redirect_target = resolve_safe_redirect_path(next, email=payload["email"])
+    response = RedirectResponse(url=redirect_target, status_code=302)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    _set_session_cookie(response, payload["session_id"])
+    _set_csrf_cookie(response, token=generate_csrf_token())
+    return response
+
+
 @app.post("/auth/logout")
 def auth_logout(request: Request, response: Response) -> dict:
     payload = logout_payload(request.cookies.get("session_id"))
@@ -287,7 +315,10 @@ def auth_logout(request: Request, response: Response) -> dict:
 
 @app.get("/auth/session", response_model=AuthSessionResponse)
 def auth_session(request: Request, response: Response) -> dict:
-    payload = get_auth_session_payload(request.cookies.get("session_id"))
+    session_id = request.cookies.get("session_id")
+    payload = get_auth_session_payload(session_id)
+    if payload["authenticated"] and session_id:
+        _set_session_cookie(response, session_id)
     _ensure_authenticated_csrf(response, request, payload["authenticated"])
     return payload
 

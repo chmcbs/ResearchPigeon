@@ -14,6 +14,7 @@ from core.auth_messages import (
 from core.db import connection_scope
 
 MAGIC_LINK_TTL_MINUTES = 30
+DIGEST_LOGIN_TTL_HOURS = 30
 SESSION_TTL_DAYS = 30
 MAX_EMAIL_LENGTH = 254
 
@@ -75,9 +76,43 @@ WHERE session_id = %s
   AND expires_at > NOW();
 """
 
+REFRESH_SESSION_SQL = """
+UPDATE auth_sessions
+SET expires_at = %s
+WHERE session_id = %s
+  AND expires_at > NOW();
+"""
+
 DELETE_SESSION_SQL = """
 DELETE FROM auth_sessions
 WHERE session_id = %s;
+"""
+
+DELETE_EXPIRED_DIGEST_TOKENS_SQL = """
+DELETE FROM digest_login_tokens
+WHERE expires_at < NOW();
+"""
+
+DELETE_USER_DIGEST_TOKENS_SQL = """
+DELETE FROM digest_login_tokens
+WHERE user_id = %s;
+"""
+
+INSERT_DIGEST_TOKEN_SQL = """
+INSERT INTO digest_login_tokens (
+    token_hash,
+    user_id,
+    email,
+    expires_at
+)
+VALUES (%s, %s, %s, %s);
+"""
+
+FETCH_DIGEST_TOKEN_SQL = """
+SELECT user_id, email
+FROM digest_login_tokens
+WHERE token_hash = %s
+  AND expires_at > NOW();
 """
 
 
@@ -120,10 +155,15 @@ def create_magic_link(email: str, conn=None) -> tuple[str, str]:
     return raw_token, user_id
 
 
-def verify_magic_link(token: str, conn=None) -> tuple[str, str, str]:
-    token_hash = _token_hash(token)
+def _insert_session(cur, *, user_id: str, email: str) -> str:
     session_id = secrets.token_urlsafe(32)
     expires_at = datetime.now(UTC) + timedelta(days=SESSION_TTL_DAYS)
+    cur.execute(INSERT_SESSION_SQL, (session_id, user_id, email, expires_at))
+    return session_id
+
+
+def verify_magic_link(token: str, conn=None) -> tuple[str, str, str]:
+    token_hash = _token_hash(token)
 
     with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
@@ -135,7 +175,43 @@ def verify_magic_link(token: str, conn=None) -> tuple[str, str, str]:
             email = row[1]
             cur.execute(DELETE_EXPIRED_SESSIONS_SQL)
             cur.execute(DELETE_USER_SESSIONS_SQL, (user_id,))
-            cur.execute(INSERT_SESSION_SQL, (session_id, user_id, email, expires_at))
+            session_id = _insert_session(cur, user_id=user_id, email=email)
+
+    return session_id, user_id, email
+
+
+def create_digest_login_token(email: str, conn=None) -> tuple[str, str]:
+    normalized_email = _normalize_email(email)
+    user_id = _user_id_from_email(normalized_email)
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = _token_hash(raw_token)
+    expires_at = datetime.now(UTC) + timedelta(hours=DIGEST_LOGIN_TTL_HOURS)
+
+    with connection_scope(conn) as active_conn:
+        with active_conn.cursor() as cur:
+            cur.execute(DELETE_EXPIRED_DIGEST_TOKENS_SQL)
+            cur.execute(DELETE_USER_DIGEST_TOKENS_SQL, (user_id,))
+            cur.execute(
+                INSERT_DIGEST_TOKEN_SQL,
+                (token_hash, user_id, normalized_email, expires_at),
+            )
+
+    return raw_token, user_id
+
+
+def login_from_digest_token(token: str, conn=None) -> tuple[str, str, str]:
+    token_hash = _token_hash(token)
+
+    with connection_scope(conn) as active_conn:
+        with active_conn.cursor() as cur:
+            cur.execute(FETCH_DIGEST_TOKEN_SQL, (token_hash,))
+            row = cur.fetchone()
+            if row is None:
+                raise ValueError(MAGIC_LINK_INVALID_MESSAGE)
+            user_id = row[0]
+            email = row[1]
+            cur.execute(DELETE_EXPIRED_SESSIONS_SQL)
+            session_id = _insert_session(cur, user_id=user_id, email=email)
 
     return session_id, user_id, email
 
@@ -152,6 +228,17 @@ def get_session_user(session_id: str, conn=None) -> tuple[str, str] | None:
     if row is None:
         return None
     return row[0], row[1]
+
+
+def refresh_session(session_id: str, conn=None) -> bool:
+    if not session_id:
+        return False
+
+    expires_at = datetime.now(UTC) + timedelta(days=SESSION_TTL_DAYS)
+    with connection_scope(conn) as active_conn:
+        with active_conn.cursor() as cur:
+            cur.execute(REFRESH_SESSION_SQL, (expires_at, session_id))
+            return cur.rowcount > 0
 
 
 def revoke_session(session_id: str, conn=None) -> bool:

@@ -4,9 +4,11 @@ Daily digest email formatting and delivery
 
 from datetime import UTC, datetime
 from html import escape
+from urllib.parse import urlencode
 
 from email.message import EmailMessage
 
+from core.auth import create_digest_login_token
 from core.config import get_app_base_url, get_email_from, get_product_name, is_email_delivery_configured
 from core.digest_content import (
     DigestPick,
@@ -103,14 +105,24 @@ def build_digest_email_subject(*, generated_at: datetime | None = None) -> str:
     return f"Your daily research digest — {date_label}"
 
 
+def build_digest_login_url(base_url: str, token: str, next_path: str) -> str:
+    query = urlencode({"token": token, "next": next_path})
+    return f"{base_url.rstrip('/')}/auth/digest-login?{query}"
+
+
 def _digest_urls(
     *,
     app_base_url: str | None = None,
     unsubscribe_url: str | None = None,
+    login_token: str | None = None,
 ) -> tuple[str, str, str, str]:
     base_url = (app_base_url or get_app_base_url()).rstrip("/")
-    preferences_url = f"{base_url}/profiles"
-    feedback_url = f"{base_url}/papers"
+    if login_token:
+        preferences_url = build_digest_login_url(base_url, login_token, "/profiles")
+        feedback_url = build_digest_login_url(base_url, login_token, "/papers")
+    else:
+        preferences_url = f"{base_url}/profiles"
+        feedback_url = f"{base_url}/papers"
     resolved_unsubscribe_url = unsubscribe_url or f"{base_url}/email/unsubscribe"
     return base_url, preferences_url, feedback_url, resolved_unsubscribe_url
 
@@ -120,10 +132,12 @@ def build_digest_email_body(
     *,
     app_base_url: str | None = None,
     unsubscribe_url: str | None = None,
+    login_token: str | None = None,
 ) -> str:
     _, preferences_url, feedback_url, resolved_unsubscribe_url = _digest_urls(
         app_base_url=app_base_url,
         unsubscribe_url=unsubscribe_url,
+        login_token=login_token,
     )
 
     lines = [
@@ -157,10 +171,12 @@ def build_digest_email_html(
     *,
     app_base_url: str | None = None,
     unsubscribe_url: str | None = None,
+    login_token: str | None = None,
 ) -> str:
     _, preferences_url, feedback_url, resolved_unsubscribe_url = _digest_urls(
         app_base_url=app_base_url,
         unsubscribe_url=unsubscribe_url,
+        login_token=login_token,
     )
 
     section_blocks: list[str] = []
@@ -349,16 +365,19 @@ def deliver_digest_email_for_user(
 
     ensure_email_settings(user_id, conn=conn)
     unsubscribe_url = build_unsubscribe_url(user_id)
+    login_token, _ = create_digest_login_token(user_id, conn=conn)
 
     recipient = (to_email or user_id).strip()
     subject = build_digest_email_subject()
     plain_body = build_digest_email_body(
         sections,
         unsubscribe_url=unsubscribe_url,
+        login_token=login_token,
     )
     html_body = build_digest_email_html(
         sections,
         unsubscribe_url=unsubscribe_url,
+        login_token=login_token,
     )
 
     try:
