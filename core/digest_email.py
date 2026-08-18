@@ -36,6 +36,7 @@ def score_display_percent(final_score: float) -> int:
     return max(0, min(100, round(score * 100)))
 
 
+# Keep these thresholds in sync with frontend/static/format.js
 def star_rating_from_percent(percent: int) -> int:
     if percent >= 75:
         return 3

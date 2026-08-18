@@ -19,6 +19,8 @@ def _set_valid_production_env(monkeypatch) -> None:
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("EMAIL_FROM", "noreply@example.com")
     monkeypatch.setenv("EMAIL_UNSUBSCRIBE_SECRET", "y" * 32)
+    monkeypatch.setenv("LLM_PROVIDER", "openai")
+    monkeypatch.setenv("OPENAI_API_KEY", "test-openai-key")
 
 
 def test_validate_runtime_config_allows_development_defaults(monkeypatch):
@@ -58,6 +60,22 @@ def test_validate_runtime_config_allows_valid_production_settings(monkeypatch):
     _set_valid_production_env(monkeypatch)
 
     validate_runtime_config()
+
+
+def test_validate_runtime_config_rejects_mock_llm_in_production(monkeypatch):
+    _set_valid_production_env(monkeypatch)
+    monkeypatch.setenv("LLM_PROVIDER", "mock")
+
+    with pytest.raises(StartupConfigError, match="LLM_PROVIDER"):
+        validate_runtime_config()
+
+
+def test_validate_runtime_config_requires_openai_key_in_production(monkeypatch):
+    _set_valid_production_env(monkeypatch)
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+
+    with pytest.raises(StartupConfigError, match="OPENAI_API_KEY"):
+        validate_runtime_config()
 
 
 def test_validate_runtime_config_rejects_dev_magic_link_in_production(monkeypatch):

@@ -482,10 +482,6 @@ def _build_prompt(
     )
 
 
-def _is_valid_description(description: str) -> bool:
-    return not _has_length_failure(description)
-
-
 ########################################
 ############ PERSISTENCE ###############
 ########################################
@@ -655,98 +651,98 @@ def _process_paper(
             )
             return PaperOutcome(arxiv_id=paper.arxiv_id, status="skipped_locked")
 
-    started = time.monotonic()
-    total_input_tokens = 0
-    total_output_tokens = 0
-    total_latency_ms = 0
+        started = time.monotonic()
+        total_input_tokens = 0
+        total_output_tokens = 0
+        total_latency_ms = 0
 
-    retry_reasons: frozenset[str] | None = None
+        retry_reasons: frozenset[str] | None = None
 
-    # Limit to one regeneration pass so validation failures do not loop indefinitely under load
-    for attempt in range(2):
-        remaining = request_timeout_s - (time.monotonic() - started)
-        if remaining <= 0:
-            return PaperOutcome(
+        # Limit to one regeneration pass so validation failures do not loop indefinitely under load
+        for attempt in range(2):
+            remaining = request_timeout_s - (time.monotonic() - started)
+            if remaining <= 0:
+                return PaperOutcome(
+                    arxiv_id=paper.arxiv_id,
+                    status="skipped_timeout",
+                    input_tokens=total_input_tokens,
+                    output_tokens=total_output_tokens,
+                    latency_ms=total_latency_ms,
+                )
+
+            prompt = _build_prompt(
+                title=paper.title,
+                abstract=paper.abstract,
+                retry_reasons=retry_reasons,
+            )
+            try:
+                result = _generate_with_retries(
+                    provider,
+                    prompt,
+                    started_at=started,
+                    request_timeout_s=request_timeout_s,
+                )
+            except Exception as error:
+                logger.warning(
+                    "LLM call failed for paper",
+                    extra={
+                        "event": "llm.paper.failed",
+                        "arxiv_id": paper.arxiv_id,
+                        "retry": attempt == 1,
+                        "error_type": error.__class__.__name__,
+                    },
+                )
+                if attempt == 1:
+                    return PaperOutcome(
+                        arxiv_id=paper.arxiv_id,
+                        status="failed",
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        latency_ms=total_latency_ms,
+                    )
+                continue
+
+            total_input_tokens += result.input_tokens
+            total_output_tokens += result.output_tokens
+            total_latency_ms += result.latency_ms
+            description = _clean_sentence(result.text)
+
+            failures = _validation_failures(title=paper.title, description=description)
+            if failures:
+                if attempt == 1:
+                    return PaperOutcome(
+                        arxiv_id=paper.arxiv_id,
+                        status="skipped_validation",
+                        input_tokens=total_input_tokens,
+                        output_tokens=total_output_tokens,
+                        latency_ms=total_latency_ms,
+                    )
+                retry_reasons = failures
+                continue
+
+            outcome = PaperOutcome(
                 arxiv_id=paper.arxiv_id,
-                status="skipped_timeout",
+                status="succeeded",
                 input_tokens=total_input_tokens,
                 output_tokens=total_output_tokens,
                 latency_ms=total_latency_ms,
             )
-
-        prompt = _build_prompt(
-            title=paper.title,
-            abstract=paper.abstract,
-            retry_reasons=retry_reasons,
-        )
-        try:
-            result = _generate_with_retries(
-                provider,
-                prompt,
-                started_at=started,
-                request_timeout_s=request_timeout_s,
+            _persist_description(
+                paper=paper,
+                description=description,
+                batch_id=batch_id,
+                provider=provider,
+                outcome=outcome,
             )
-        except Exception as error:
-            logger.warning(
-                "LLM call failed for paper",
-                extra={
-                    "event": "llm.paper.failed",
-                    "arxiv_id": paper.arxiv_id,
-                    "retry": attempt == 1,
-                    "error_type": error.__class__.__name__,
-                },
-            )
-            if attempt == 1:
-                return PaperOutcome(
-                    arxiv_id=paper.arxiv_id,
-                    status="failed",
-                    input_tokens=total_input_tokens,
-                    output_tokens=total_output_tokens,
-                    latency_ms=total_latency_ms,
-                )
-            continue
+            return outcome
 
-        total_input_tokens += result.input_tokens
-        total_output_tokens += result.output_tokens
-        total_latency_ms += result.latency_ms
-        description = _clean_sentence(result.text)
-
-        failures = _validation_failures(title=paper.title, description=description)
-        if failures:
-            if attempt == 1:
-                return PaperOutcome(
-                    arxiv_id=paper.arxiv_id,
-                    status="skipped_validation",
-                    input_tokens=total_input_tokens,
-                    output_tokens=total_output_tokens,
-                    latency_ms=total_latency_ms,
-                )
-            retry_reasons = failures
-            continue
-
-        outcome = PaperOutcome(
+        return PaperOutcome(
             arxiv_id=paper.arxiv_id,
-            status="succeeded",
+            status="skipped_validation",
             input_tokens=total_input_tokens,
             output_tokens=total_output_tokens,
             latency_ms=total_latency_ms,
         )
-        _persist_description(
-            paper=paper,
-            description=description,
-            batch_id=batch_id,
-            provider=provider,
-            outcome=outcome,
-        )
-        return outcome
-
-    return PaperOutcome(
-        arxiv_id=paper.arxiv_id,
-        status="skipped_validation",
-        input_tokens=total_input_tokens,
-        output_tokens=total_output_tokens,
-        latency_ms=total_latency_ms,
-    )
 
 
 # Top-level function called by core/cron.py and core/pipeline.py

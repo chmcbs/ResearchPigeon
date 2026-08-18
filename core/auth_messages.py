@@ -14,5 +14,4 @@ EMAIL_SEND_FAILED_MESSAGE = (
     "We couldn't send the sign-in email. Please try again in a few minutes."
 )
 AUTH_SERVER_ERROR_MESSAGE = "Something went wrong on our side. Please try again later."
-AUTH_GENERIC_ERROR_MESSAGE = "Something went wrong. Please try again later."
 RATE_LIMIT_USER_MESSAGE = "Too many sign-in attempts. Please try again later."

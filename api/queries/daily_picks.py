@@ -5,19 +5,12 @@ SQL queries for daily pick retrieval and profile resolution
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Callable
-from core.recommendation_query_fragments import LATEST_RUN_FOR_PROFILE_AND_RUNS_CTE
-
-LATEST_DAILY_PICKS_SQL = """
-WITH latest_run AS (
-    SELECT
-        run_id,
-        MAX(generated_at) AS generated_at
-    FROM recommendations
-    WHERE profile_id = %s
-    GROUP BY run_id
-    ORDER BY MAX(generated_at) DESC
-    LIMIT 1
+from core.recommendation_query_fragments import (
+    LATEST_RUN_FOR_PROFILE_AND_RUNS_CTE,
+    LATEST_RUN_FOR_PROFILE_CTE,
 )
+
+DAILY_PICK_SELECT_SQL = """
 SELECT
     rec.rank,
     p.arxiv_id,
@@ -45,35 +38,9 @@ JOIN runs r ON r.run_id = rec.run_id
 ORDER BY rec.rank ASC;
 """
 
+LATEST_DAILY_PICKS_SQL = LATEST_RUN_FOR_PROFILE_CTE + DAILY_PICK_SELECT_SQL
 LATEST_DAILY_PICKS_FOR_RUNS_SQL = (
-    LATEST_RUN_FOR_PROFILE_AND_RUNS_CTE
-    + """
-SELECT
-    rec.rank,
-    p.arxiv_id,
-    p.title,
-    COALESCE(p.abstract, '') AS abstract,
-    d.description,
-    p.pdf_url,
-    rec.run_id::text,
-    r.category,
-    rec.generated_at,
-    rec.base_dense_score,
-    rec.keyword_boost,
-    rec.final_score,
-    rec.candidate_window,
-    rec.fallback_stage,
-    p.published_at,
-    p.authors
-FROM latest_run lr
-JOIN recommendations rec
-  ON rec.run_id = lr.run_id
- AND rec.profile_id = %s
-JOIN papers p ON p.arxiv_id = rec.arxiv_id
-LEFT JOIN descriptions d ON d.arxiv_id = p.arxiv_id
-JOIN runs r ON r.run_id = rec.run_id
-ORDER BY rec.rank ASC;
-"""
+    LATEST_RUN_FOR_PROFILE_AND_RUNS_CTE + DAILY_PICK_SELECT_SQL
 )
 
 RESOLVE_PROFILE_SQL = """

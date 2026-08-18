@@ -225,7 +225,7 @@ function renderList(container, items, emptyText, section) {
     const title = document.createElement("a");
     title.className = "feedback-item-text";
     title.textContent = item.title;
-    title.href = item.pdf_url || "https://arxiv.org/pdf/" + item.arxiv_id;
+    title.href = paperHref(item.pdf_url, item.arxiv_id);
     title.target = "_blank";
     title.rel = "noreferrer";
 

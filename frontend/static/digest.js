@@ -56,24 +56,6 @@ function sectionHeading(section) {
   return "Profile " + section.profile_slot;
 }
 
-/** 0–3 ★ from rounded percent: <55 none, 55–64 -> 1, 65–74 -> 2, 75+ -> 3 */
-function starRatingFromPercent(percent) {
-  if (percent >= 75) {
-    return 3;
-  }
-  if (percent >= 65) {
-    return 2;
-  }
-  if (percent >= 55) {
-    return 1;
-  }
-  return 0;
-}
-
-function starsDisplay(percent) {
-  return "⭐".repeat(starRatingFromPercent(percent));
-}
-
 function sectionsWithPicks(sections) {
   return (sections || []).filter((section) => (section.picks || []).length > 0);
 }
@@ -126,7 +108,7 @@ function renderSections(sections) {
       const title = document.createElement("a");
       title.className = "digest-pick-title";
       title.textContent = pick.title;
-      title.href = pick.pdf_url || ("https://arxiv.org/abs/" + pick.arxiv_id);
+      title.href = paperHref(pick.pdf_url, pick.arxiv_id);
       title.target = "_blank";
       title.rel = "noreferrer";
 

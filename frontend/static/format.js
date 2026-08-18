@@ -50,6 +50,33 @@ function scoreDisplayPercent(finalScore) {
   return Math.max(0, Math.min(100, Math.round(score * 100)));
 }
 
+/** 0–3 ★ from rounded percent: <55 none, 55–64 -> 1, 65–74 -> 2, 75+ -> 3.
+ * Keep in sync with core/digest_email.py.
+ */
+function starRatingFromPercent(percent) {
+  if (percent >= 75) {
+    return 3;
+  }
+  if (percent >= 65) {
+    return 2;
+  }
+  if (percent >= 55) {
+    return 1;
+  }
+  return 0;
+}
+
+function starsDisplay(percent) {
+  return "⭐".repeat(starRatingFromPercent(percent));
+}
+
+function paperHref(pdfUrl, arxivId) {
+  if (pdfUrl) {
+    return pdfUrl;
+  }
+  return "https://arxiv.org/abs/" + arxivId;
+}
+
 // Show every author up to maxNamed; beyond that, collapse to "First author et al.".
 function formatAuthors(authors, maxNamed = 3) {
   if (!Array.isArray(authors) || authors.length === 0) {

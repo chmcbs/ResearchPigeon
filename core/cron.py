@@ -43,6 +43,9 @@ from core.startup import StartupConfigError, validate_runtime_config
 
 logger = get_logger(__name__)
 
+DESCRIPTION_BATCH_RETRY_ATTEMPTS = 3
+EMAIL_RETRY_ATTEMPTS = 3
+
 ########################################
 ################ SQL ###################
 ########################################
@@ -154,6 +157,10 @@ def _load_monitor_state() -> dict[str, Any]:
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except Exception:
+        logger.warning(
+            "Monitor state file was unreadable; resetting in-memory state",
+            extra={"event": "cron.monitor_state.reset", "path": str(path)},
+        )
         return {
             "alert_last_sent_at": {},
             "zero_output_streak": 0,
@@ -692,7 +699,7 @@ def run_daily_digest_for_all_users(
         if shared_run_ids and users_to_process:
             # Continue digest delivery even when blurb generation degrades so core service remains available
             llm_error: Exception | None = None
-            for attempt in range(3):
+            for attempt in range(DESCRIPTION_BATCH_RETRY_ATTEMPTS):
                 try:
                     description_batch = run_description_batch_for_recommendations(
                         run_ids=shared_run_ids,
@@ -709,7 +716,7 @@ def run_daily_digest_for_all_users(
                             "cron_run_id": cron_run_id,
                             "run_ids": shared_run_ids,
                             "attempt": attempt + 1,
-                            "max_attempts": 3,
+                            "max_attempts": DESCRIPTION_BATCH_RETRY_ATTEMPTS,
                             "error_type": error.__class__.__name__,
                         },
                     )
@@ -1123,7 +1130,7 @@ def _deliver_digest_email_with_retries(
     conn=None,
 ) -> dict[str, Any]:
     last_result: dict[str, Any] = {"status": "failed", "error_message": "unknown"}
-    for attempt in range(3):
+    for attempt in range(EMAIL_RETRY_ATTEMPTS):
         try:
             last_result = deliver_digest_email_for_user(
                 user_id=user_id,
@@ -1145,7 +1152,7 @@ def _deliver_digest_email_with_retries(
                 "cron_run_id": cron_run_id,
                 "user_id": user_id,
                 "attempt": attempt + 1,
-                "max_attempts": 3,
+                "max_attempts": EMAIL_RETRY_ATTEMPTS,
             },
         )
     if last_result.get("status") == "failed":

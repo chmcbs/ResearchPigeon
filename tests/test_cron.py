@@ -819,3 +819,15 @@ def test_digest_window_still_owed_when_email_or_picks_fail():
     assert not cron._digest_window_still_owed(users_to_process=[], results=[])
 
 
+def test_load_monitor_state_resets_corrupt_file(tmp_path, caplog):
+    path = tmp_path / "monitor-state.json"
+    path.write_text("{not-json", encoding="utf-8")
+
+    with caplog.at_level("WARNING"):
+        state = cron._load_monitor_state()
+
+    assert state["zero_output_streak"] == 0
+    assert state["alert_last_sent_at"] == {}
+    assert "Monitor state file was unreadable" in caplog.text
+
+

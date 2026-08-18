@@ -7,7 +7,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
 
 from core.config import is_app_https
-from core.security import CSRF_HEADER_NAME, validate_csrf_token
+from core.security import CSRF_COOKIE_NAME, CSRF_HEADER_NAME, validate_csrf_token
 
 UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 
@@ -52,7 +52,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 class CsrfMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next) -> Response:
         if request.method in UNSAFE_METHODS and request.url.path not in CSRF_EXEMPT_PATHS:
-            cookie_token = request.cookies.get("csrf_token")
+            cookie_token = request.cookies.get(CSRF_COOKIE_NAME)
             header_token = request.headers.get(CSRF_HEADER_NAME)
             if not validate_csrf_token(cookie_token, header_token):
                 return JSONResponse(

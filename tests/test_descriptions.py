@@ -351,6 +351,84 @@ def test_process_paper_retries_on_empty_response(monkeypatch):
     assert "repeated the title" not in retry_prompt
 
 
+def test_process_paper_holds_claim_during_generation(monkeypatch):
+    paper = PaperCandidate(
+        arxiv_id="2601.00006",
+        title="A Completely Different Headline About Widgets",
+        abstract="We evaluate widget throughput on synthetic workloads.",
+        max_score=0.91,
+    )
+    held = {"active": False, "during_generate": False}
+
+    @contextmanager
+    def _claim(_arxiv_id: str):
+        held["active"] = True
+        try:
+            yield True
+        finally:
+            held["active"] = False
+
+    def generate(prompt, *, timeout_s):
+        del prompt, timeout_s
+        held["during_generate"] = held["active"]
+        return LLMResult(
+            text=(
+                "Synthetic workload experiments quantify widget throughput limits across hardware tiers."
+            ),
+            input_tokens=10,
+            output_tokens=5,
+            latency_ms=1,
+        )
+
+    provider = MockLLMProvider()
+    provider.generate = generate
+    monkeypatch.setattr("core.descriptions._paper_generation_claim", _claim)
+    monkeypatch.setattr("core.descriptions._persist_description", Mock(return_value=True))
+
+    outcome = _process_paper(
+        paper,
+        provider,
+        batch_id="batch-hold",
+        request_timeout_s=5,
+    )
+
+    assert outcome.status == "succeeded"
+    assert held["during_generate"] is True
+    assert held["active"] is False
+
+
+def test_process_paper_skips_when_claim_not_acquired(monkeypatch):
+    paper = PaperCandidate(
+        arxiv_id="2601.00007",
+        title="A Completely Different Headline About Widgets",
+        abstract="We evaluate widget throughput on synthetic workloads.",
+        max_score=0.91,
+    )
+
+    @contextmanager
+    def _claim(_arxiv_id: str):
+        yield False
+
+    generate = Mock()
+    provider = MockLLMProvider()
+    provider.generate = generate
+    monkeypatch.setattr("core.descriptions._paper_generation_claim", _claim)
+    monkeypatch.setattr("core.descriptions._description_exists", Mock(return_value=False))
+    persist = Mock()
+    monkeypatch.setattr("core.descriptions._persist_description", persist)
+
+    outcome = _process_paper(
+        paper,
+        provider,
+        batch_id="batch-skip",
+        request_timeout_s=5,
+    )
+
+    assert outcome.status == "skipped_locked"
+    generate.assert_not_called()
+    persist.assert_not_called()
+
+
 def test_run_description_batch_for_recommendations_records_stats(monkeypatch):
     candidates = [
         PaperCandidate(

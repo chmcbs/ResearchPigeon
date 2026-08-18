@@ -6,6 +6,8 @@ import os
 
 from core.config import (
     get_app_base_url,
+    get_llm_provider_name,
+    get_openai_api_key,
     is_app_https,
     is_dev_magic_link_response_enabled,
     is_email_delivery_configured,
@@ -61,4 +63,14 @@ def validate_runtime_config() -> None:
     if not os.getenv("EMAIL_UNSUBSCRIBE_SECRET", "").strip():
         raise StartupConfigError(
             "EMAIL_UNSUBSCRIBE_SECRET must be set when APP_ENV is production"
+        )
+
+    provider = get_llm_provider_name()
+    if provider == "mock":
+        raise StartupConfigError(
+            "LLM_PROVIDER must not be mock when APP_ENV is production"
+        )
+    if provider == "openai" and not get_openai_api_key():
+        raise StartupConfigError(
+            "OPENAI_API_KEY must be set when LLM_PROVIDER is openai"
         )

@@ -649,7 +649,7 @@ function renderProfiles(options = {}) {
           const text = document.createElement("a");
           text.textContent = item.title;
           text.className = "feedback-item-text";
-          text.href = item.pdf_url || `https://arxiv.org/pdf/${item.arxiv_id}`;
+          text.href = paperHref(item.pdf_url, item.arxiv_id);
           text.target = "_blank";
           text.rel = "noopener noreferrer";
 
@@ -895,7 +895,7 @@ debugResetProfilesBtn.addEventListener("click", async () => {
     "Delete ALL user profiles from the database (every account)?\n\n" +
       "CASCADE removes profile_preferences, profile_keywords, paper_feedback, " +
       "and recommendations tied to those profiles.\n\n" +
-      "Papers and runs are not removed; use Hard reset papers on the Digest page if you need a clean corpus.\n\n" +
+      "Papers and runs are not removed; use Hard reset papers on the Papers page if you need a clean corpus.\n\n" +
       "Admin-only debug reset. Requires DEBUG_ADMIN_EMAILS on the server.",
   );
   if (!ok) {

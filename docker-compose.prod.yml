@@ -2,6 +2,7 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
 #
 # Required host env vars: APP_BASE_URL, SMTP_HOST, EMAIL_FROM, EMAIL_UNSUBSCRIBE_SECRET
+# For OpenAI blurbs: OPENAI_API_KEY (LLM_PROVIDER defaults to openai)
 # Optional: POSTGRES_PASSWORD (defaults to postgres for single-node compose)
 services:
   db:
@@ -29,6 +30,10 @@ services:
       INGESTION_MAX_RESULTS: ${INGESTION_MAX_RESULTS:-150}
       EMBEDDING_LIMIT: ${EMBEDDING_LIMIT:-600}
       DAILY_PICKS_GENERATE_LIMIT_PER_USER: ${DAILY_PICKS_GENERATE_LIMIT_PER_USER:-5}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-nano}
 
   worker:
     restart: unless-stopped
@@ -43,3 +48,7 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:?EMAIL_FROM is required}
       EMAIL_UNSUBSCRIBE_SECRET: ${EMAIL_UNSUBSCRIBE_SECRET:?EMAIL_UNSUBSCRIBE_SECRET is required}
       DEBUG_ADMIN_EMAILS: ${DEBUG_ADMIN_EMAILS:-}
+      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-nano}

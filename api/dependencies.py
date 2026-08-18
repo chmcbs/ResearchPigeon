@@ -2,8 +2,6 @@
 Helpers to wire dependencies into services
 """
 
-from dataclasses import asdict
-
 import psycopg
 from fastapi import HTTPException, Request
 
@@ -341,7 +339,7 @@ def _resolve_profile(user_id: str, profile_id: str | None, conn=None) -> dict:
             conn=conn,
         ),
     )
-    return profile if isinstance(profile, dict) else asdict(profile)
+    return profile
 
 
 ########################################

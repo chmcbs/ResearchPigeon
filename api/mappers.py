@@ -3,7 +3,7 @@ Mapping for query rows and API payload fragments
 """
 
 from api.queries.daily_picks import DailyPickRow
-from api.queries.metrics import LatestRunRow, MetricsRowSet
+from api.queries.metrics import MetricsRowSet
 from api.queries.profiles import ProfileSummaryRow
 from core.arxiv_text import format_arxiv_display_text
 
@@ -31,7 +31,6 @@ def to_debug_pick(row: DailyPickRow) -> dict:
         "generated_at": row.generated_at,
         "base_dense_score": row.base_dense_score,
         "keyword_boost": row.keyword_boost,
-        "final_score": row.final_score,
         "candidate_window": row.candidate_window,
         "fallback_stage": row.fallback_stage,
     }
@@ -47,8 +46,8 @@ def to_profile_summary(row: ProfileSummaryRow) -> dict:
         "interest_sentence": row.interest_sentence,
         "digest_enabled": row.digest_enabled,
         "created_at": row.created_at,
-        "preference_updated_at": getattr(row, "preference_updated_at", None),
-        "keywords": list(getattr(row, "keywords", [])),
+        "preference_updated_at": row.preference_updated_at,
+        "keywords": list(row.keywords),
     }
 
 

@@ -10,6 +10,7 @@ from dataclasses import dataclass
 import psycopg
 from sentence_transformers import SentenceTransformer
 
+from core.config import get_embedding_limit
 from core.db import get_database_url
 from core.logging import get_logger
 
@@ -112,8 +113,9 @@ def save_embeddings(
     return len(rows)
 
 
-def run_embeddings(limit: int = 600) -> int:
-    papers = get_papers_missing_embeddings(limit)
+def run_embeddings(limit: int | None = None) -> int:
+    resolved_limit = get_embedding_limit() if limit is None else limit
+    papers = get_papers_missing_embeddings(resolved_limit)
 
     if not papers:
         logger.info(

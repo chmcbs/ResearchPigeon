@@ -8,7 +8,7 @@ import uuid
 import arxiv
 import psycopg
 
-from core.config import get_arxiv_categories
+from core.config import get_arxiv_categories, get_ingestion_max_results
 from core.arxiv_text import format_arxiv_display_text
 from core.db import get_database_url
 from core.logging import get_logger
@@ -82,7 +82,7 @@ WHERE run_id::text = ANY(%s);
 
 def fetch_papers(
     category: str = "cs.AI",
-    max_results: int = 150,
+    max_results: int | None = None,
     # SubmittedDate sorts by the v1 original submission date (paper.published /
     # published_at), NOT by latest version activity. This is intentional: it keeps
     # the ingestion fetch window on the same clock the recommendation recency
@@ -93,10 +93,13 @@ def fetch_papers(
     *,
     client: arxiv.Client | None = None,
 ):
+    resolved_max_results = (
+        get_ingestion_max_results() if max_results is None else max_results
+    )
     resolved_client = client or arxiv.Client(delay_seconds=3.0, num_retries=5)
     search = arxiv.Search(
         query=f"cat:{category}",
-        max_results=max_results,
+        max_results=resolved_max_results,
         sort_by=sort_by,
         sort_order=sort_order,
     )
@@ -152,10 +155,13 @@ def fail_run(run_id: str, error_message: str) -> None:
 
 
 def run_ingestion(
-    categories: list[str] | None = None, max_results: int = 150
+    categories: list[str] | None = None, max_results: int | None = None
 ) -> list[str]:
     if categories is None:
         categories = get_arxiv_categories()
+    resolved_max_results = (
+        get_ingestion_max_results() if max_results is None else max_results
+    )
 
     run_ids = []
     total_categories = len(categories)
@@ -166,12 +172,12 @@ def run_ingestion(
             "ingestion",
             detail=f"{index + 1}/{total_categories}: {category}…",
         )
-        run_id = start_run(category, max_results)
+        run_id = start_run(category, resolved_max_results)
 
         try:
             papers = fetch_papers(
                 category=category,
-                max_results=max_results,
+                max_results=resolved_max_results,
                 client=client,
             )
             saved_count = save_papers(papers)

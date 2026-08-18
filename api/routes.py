@@ -138,7 +138,7 @@ def _set_csrf_cookie(response: Response, *, token: str | None = None) -> None:
 
 def _ensure_authenticated_csrf(response: Response, request: Request, authenticated: bool) -> None:
     if authenticated:
-        _set_csrf_cookie(response, token=request.cookies.get("csrf_token"))
+        _set_csrf_cookie(response, token=request.cookies.get(CSRF_COOKIE_NAME))
 
 
 def _clear_auth_cookies(response: Response) -> None:
