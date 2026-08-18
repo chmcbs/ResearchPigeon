@@ -7,6 +7,7 @@ from unittest.mock import MagicMock, Mock
 import pytest
 
 from core import recommendations
+from core.recommendations_sql import FETCH_RUN_SQL, RANK_CANDIDATES_SQL
 
 
 def _mock_connection_with_cursor(cursor):
@@ -18,13 +19,13 @@ def _mock_connection_with_cursor(cursor):
     return connect, cursor
 
 
-def test_generate_recommendations_requires_completed_run(monkeypatch):
+def test_generate_recommendations_requires_rankable_run(monkeypatch):
     cursor = MagicMock()
     cursor.fetchone.side_effect = [(1,), None]
     connect, _ = _mock_connection_with_cursor(cursor)
     monkeypatch.setattr(recommendations.psycopg, "connect", connect)
 
-    with pytest.raises(ValueError, match="must exist and be completed"):
+    with pytest.raises(ValueError, match="must exist and be completed or failed"):
         recommendations.generate_recommendations(
             "run-123",
             user_id="default",
@@ -148,3 +149,19 @@ def test_generate_recommendations_rejects_invalid_override(monkeypatch):
             profile_id="profile-1",
             k_override=0,
         )
+
+
+def test_rank_sql_uses_newest_unseen_and_omits_already_sent_recycle():
+    sql = RANK_CANDIDATES_SQL
+    assert "all_seen_neutral" not in sql
+    assert "stage5" not in sql
+    assert "status IN ('completed', 'failed')" in sql
+    assert "status IN ('completed', 'failed')" in FETCH_RUN_SQL
+    window_start = sql.index("run_window AS")
+    stage0_start = sql.index("stage0 AS")
+    window_sql = sql[window_start:stage0_start]
+    assert "seen_papers" in window_sql
+    assert "sp.arxiv_id IS NULL" in window_sql
+    stage0_sql = sql[stage0_start:sql.index("stage1 AS")]
+    assert "seen_papers" not in stage0_sql
+

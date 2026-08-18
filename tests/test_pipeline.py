@@ -146,7 +146,14 @@ def test_run_pipeline_continues_when_recommendation_fails(monkeypatch):
     monkeypatch.setattr(
         pipeline,
         "generate_recommendations",
-        Mock(side_effect=[RuntimeError("boom"), [{"rank": 1}]]),
+        Mock(
+            side_effect=[
+                RuntimeError("boom"),
+                RuntimeError("boom"),
+                RuntimeError("boom"),
+                [{"rank": 1}],
+            ]
+        ),
     )
 
     summary = pipeline.run_pipeline(user_id="default", profile_id="profile-1")
@@ -222,3 +229,57 @@ def test_run_shared_pipeline_steps_uses_config_defaults(monkeypatch):
     pipeline.run_ingestion.assert_called_once_with(categories=None, max_results=111)
     pipeline.run_embeddings.assert_called_once_with(limit=222)
     assert summary == {"run_ids": ["run-1"], "embedded_count": 4}
+
+
+def test_all_recommendation_attempts_failed_requires_every_attempt_to_fail():
+    mixed = {
+        "recommendation_status_by_run_profile": {
+            "run-1": {"p1": {"status": "failed"}},
+            "run-2": {"p1": {"status": "succeeded", "recommendation_count": 3}},
+        }
+    }
+    all_failed = {
+        "recommendation_status_by_run_profile": {
+            "run-1": {"p1": {"status": "failed"}},
+            "run-2": {"p2": {"status": "failed"}},
+        }
+    }
+    empty = {"recommendation_status_by_run_profile": {}}
+    assert pipeline.all_recommendation_attempts_failed(mixed) is False
+    assert pipeline.all_recommendation_attempts_failed(all_failed) is True
+    assert pipeline.all_recommendation_attempts_failed(empty) is False
+    assert pipeline.all_recommendation_attempts_failed({}) is False
+
+
+def test_generate_recommendations_retries_then_succeeds(monkeypatch):
+    _patch_category_matching(monkeypatch)
+    generate = Mock(side_effect=[RuntimeError("boom"), [{"rank": 1}]])
+    monkeypatch.setattr(pipeline, "generate_recommendations", generate)
+
+    summary = pipeline.run_recommendations_for_profiles(
+        user_id="default",
+        profile_ids=["profile-1"],
+        run_ids=["run-1"],
+    )
+
+    assert generate.call_count == 2
+    assert summary["recommendation_status_by_run_profile"]["run-1"]["profile-1"]["status"] == "succeeded"
+
+
+def test_empty_unseen_pool_is_success_not_failure(monkeypatch):
+    _patch_category_matching(monkeypatch)
+    monkeypatch.setattr(pipeline, "generate_recommendations", Mock(return_value=[]))
+
+    summary = pipeline.run_recommendations_for_profiles(
+        user_id="default",
+        profile_ids=["profile-1"],
+        run_ids=["run-1"],
+    )
+
+    assert summary["recommendation_status_by_run_profile"]["run-1"]["profile-1"] == {
+        "status": "succeeded",
+        "recommendation_count": 0,
+        "error_message": None,
+    }
+    assert pipeline.all_recommendation_attempts_failed(summary) is False
+

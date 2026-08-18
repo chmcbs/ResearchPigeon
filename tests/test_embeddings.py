@@ -98,3 +98,10 @@ def test_save_embeddings_maps_papers_and_vectors_to_database_rows(monkeypatch):
             "model_name": embeddings.MODEL_NAME,
         },
     ]
+
+
+def test_missing_embedding_query_scores_newest_papers_first():
+    sql = embeddings.FETCH_PAPERS_MISSING_EMBEDDINGS_SQL
+    assert "ORDER BY p.published_at DESC NULLS LAST" in sql
+    assert "inserted_at ASC" not in sql
+

@@ -30,7 +30,11 @@ from core.config import (
     is_monitor_daily_summary_enabled,
 )
 from core.cron_schedule import LONDON_TZ, wait_until_digest_send_time
-from core.pipeline import run_recommendations_for_profiles, run_shared_pipeline_steps
+from core.pipeline import (
+    all_recommendation_attempts_failed,
+    run_recommendations_for_profiles,
+    run_shared_pipeline_steps,
+)
 from core.descriptions import run_description_batch_for_recommendations
 from core.digest_email import deliver_digest_email_for_user
 from core.email import deliver_email_message
@@ -560,11 +564,13 @@ def run_daily_digest_for_all_users(
 
         for user_id, profile_ids in users_to_process:
             try:
-                run_recommendations_for_profiles(
+                rec_summary = run_recommendations_for_profiles(
                     user_id=user_id,
                     profile_ids=profile_ids,
                     run_ids=shared_run_ids,
                 )
+                if all_recommendation_attempts_failed(rec_summary):
+                    raise RuntimeError("all recommendation attempts failed")
                 succeeded += 1
                 results.append(
                     {

@@ -48,15 +48,15 @@ def _get_effective_k(cur, profile_id: str, k_override: int | None) -> int:
     return int(row[0])
 
 
-def _ensure_completed_run(cur, run_id: str) -> tuple[str, str, int]:
+def _ensure_rankable_run(cur, run_id: str) -> tuple[str, str, int]:
     cur.execute(FETCH_RUN_SQL, (run_id,))
     row = cur.fetchone()
     if row is None:
-        raise ValueError(f"Run {run_id} must exist and be completed")
+        raise ValueError(f"Run {run_id} must exist and be completed or failed")
     return str(row[0]), str(row[1]), int(row[2])
 
 
-# Rank papers for a completed run and persist as recommendations
+# Rank papers for a completed or failed run and persist as recommendations
 def generate_recommendations(
     run_id: str,
     user_id: str,
@@ -67,7 +67,7 @@ def generate_recommendations(
 
     with psycopg.connect(get_database_url()) as conn:
         with conn.cursor() as cur:
-            _ensure_completed_run(cur, run_id)
+            _ensure_rankable_run(cur, run_id)
             effective_k = _get_effective_k(cur, resolved_profile_id, k_override)
 
             cur.execute(

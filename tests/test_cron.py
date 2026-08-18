@@ -649,3 +649,89 @@ def test_cron_window_key_uses_london_date():
     started_at = datetime(2026, 8, 18, 3, 0, tzinfo=UTC)
     assert cron._cron_window_key(started_at) == "daily-digest:2026-08-18"
 
+
+def test_run_daily_digest_treats_all_failed_picks_as_user_failure(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(
+        cron,
+        "run_shared_pipeline_steps",
+        Mock(return_value={"run_ids": ["run-shared"], "embedded_count": 1}),
+    )
+    monkeypatch.setattr(
+        cron,
+        "run_recommendations_for_profiles",
+        Mock(
+            return_value={
+                "recommendation_status_by_run_profile": {
+                    "run-shared": {"profile-1": {"status": "failed"}}
+                }
+            }
+        ),
+    )
+    deliver_email = Mock()
+    monkeypatch.setattr(cron, "deliver_digest_email_for_user", deliver_email)
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["users_failed"] == 1
+    assert payload["users_succeeded"] == 0
+    deliver_email.assert_not_called()
+    cron.wait_until_digest_send_time.assert_not_called()
+
+
+def test_run_daily_digest_sends_when_some_topics_succeed(monkeypatch):
+    monkeypatch.setattr(
+        cron,
+        "list_users_with_digest_selection",
+        Mock(return_value=["user-1"]),
+    )
+    monkeypatch.setattr(
+        cron,
+        "list_digest_selected_profile_ids",
+        Mock(return_value=["profile-1", "profile-2"]),
+    )
+    monkeypatch.setattr(cron, "list_digest_categories", Mock(return_value=["cs.AI"]))
+    monkeypatch.setattr(
+        cron,
+        "run_shared_pipeline_steps",
+        Mock(return_value={"run_ids": ["run-shared"], "embedded_count": 1}),
+    )
+    monkeypatch.setattr(
+        cron,
+        "run_recommendations_for_profiles",
+        Mock(
+            return_value={
+                "recommendation_status_by_run_profile": {
+                    "run-shared": {
+                        "profile-1": {"status": "failed"},
+                        "profile-2": {"status": "succeeded", "recommendation_count": 3},
+                    }
+                }
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        cron,
+        "run_description_batch_for_recommendations",
+        Mock(return_value={"attempted": 0}),
+    )
+    deliver_email = Mock(return_value={"status": "sent", "error_message": None})
+    monkeypatch.setattr(cron, "deliver_digest_email_for_user", deliver_email)
+
+    payload = cron.run_daily_digest_for_all_users()
+
+    assert payload["users_succeeded"] == 1
+    deliver_email.assert_called_once()
+    cron.wait_until_digest_send_time.assert_called_once()
+
+

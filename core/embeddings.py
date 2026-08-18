@@ -27,7 +27,7 @@ SELECT p.arxiv_id, p.title, p.abstract
 FROM papers p
 LEFT JOIN paper_embeddings e ON p.arxiv_id = e.arxiv_id
 WHERE e.arxiv_id IS NULL
-ORDER BY p.inserted_at ASC
+ORDER BY p.published_at DESC NULLS LAST, p.inserted_at DESC, p.arxiv_id ASC
 LIMIT %s;
 """
 

@@ -16,6 +16,8 @@ from core.recommendations import generate_recommendations
 
 logger = get_logger(__name__)
 
+RECOMMENDATION_RETRY_ATTEMPTS = 3
+
 
 def _stringify_error(error: Exception) -> str:
     text = str(error).strip()
@@ -39,6 +41,52 @@ def _normalize_profile_ids(
         raise ValueError("provide either profile_id or profile_ids")
 
     return target_profile_ids
+
+
+def _generate_recommendations_with_retries(
+    run_id: str,
+    *,
+    user_id: str,
+    profile_id: str,
+) -> list[dict]:
+    last_error: Exception | None = None
+    for attempt in range(RECOMMENDATION_RETRY_ATTEMPTS):
+        try:
+            return generate_recommendations(
+                run_id,
+                user_id=user_id,
+                profile_id=profile_id,
+            )
+        except Exception as error:
+            last_error = error
+            logger.warning(
+                "Recommendation attempt failed",
+                extra={
+                    "event": "pipeline.step.retry",
+                    "step": "recommendations",
+                    "run_id": run_id,
+                    "profile_id": profile_id,
+                    "attempt": attempt + 1,
+                    "max_attempts": RECOMMENDATION_RETRY_ATTEMPTS,
+                    "error_type": error.__class__.__name__,
+                },
+            )
+    assert last_error is not None
+    raise last_error
+
+
+def all_recommendation_attempts_failed(summary: dict) -> bool:
+    if not isinstance(summary, dict):
+        return False
+    statuses = [
+        entry.get("status")
+        for by_profile in summary.get("recommendation_status_by_run_profile", {}).values()
+        for entry in by_profile.values()
+        if isinstance(entry, dict)
+    ]
+    if not statuses:
+        return False
+    return all(status == "failed" for status in statuses)
 
 
 def _matching_run_ids_for_profile(
@@ -169,7 +217,7 @@ def run_recommendations_for_profiles(
             recommendations_by_run_profile.setdefault(run_id, {})
             recommendation_status_by_run_profile.setdefault(run_id, {})
             try:
-                recommendations = generate_recommendations(
+                recommendations = _generate_recommendations_with_retries(
                     run_id,
                     user_id=user_id,
                     profile_id=target_profile_id,
@@ -182,16 +230,28 @@ def run_recommendations_for_profiles(
                     "recommendation_count": len(recommendations),
                     "error_message": None,
                 }
-                logger.info(
-                    "Recommendations saved",
-                    extra={
-                        "event": "pipeline.step.completed",
-                        "step": "recommendations",
-                        "run_id": run_id,
-                        "profile_id": target_profile_id,
-                        "recommendation_count": len(recommendations),
-                    },
-                )
+                if recommendations:
+                    logger.info(
+                        "Recommendations saved",
+                        extra={
+                            "event": "pipeline.step.completed",
+                            "step": "recommendations",
+                            "run_id": run_id,
+                            "profile_id": target_profile_id,
+                            "recommendation_count": len(recommendations),
+                        },
+                    )
+                else:
+                    logger.info(
+                        "No unseen papers left for profile",
+                        extra={
+                            "event": "pipeline.step.skipped",
+                            "step": "recommendations",
+                            "run_id": run_id,
+                            "profile_id": target_profile_id,
+                            "reason": "empty_unseen_pool",
+                        },
+                    )
             except Exception as error:
                 recommendations_by_run_profile[run_id][target_profile_id] = []
                 recommendation_status_by_run_profile[run_id][target_profile_id] = {

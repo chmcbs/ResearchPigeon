@@ -8,7 +8,7 @@ FETCH_RUN_SQL = """
 SELECT run_id, category, max_results
 FROM runs
 WHERE run_id = %s
-  AND status = 'completed';
+  AND status IN ('completed', 'failed');
 """
 
 FETCH_EFFECTIVE_K_SQL = """
@@ -22,7 +22,7 @@ WITH run_context AS (
     SELECT category, max_results
     FROM runs
     WHERE run_id = %s
-      AND status = 'completed'
+      AND status IN ('completed', 'failed')
 ),
 preference_context AS (
     SELECT preference_embedding
@@ -64,6 +64,8 @@ run_window AS (
             ORDER BY bp.published_at DESC NULLS LAST, bp.arxiv_id ASC
         ) AS run_rank
     FROM base_papers bp
+    LEFT JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
+    WHERE sp.arxiv_id IS NULL
 ),
 stage0 AS (
     SELECT
@@ -76,9 +78,7 @@ stage0 AS (
         'run'::text AS candidate_window
     FROM run_window rw
     CROSS JOIN run_context rc
-    LEFT JOIN seen_papers sp ON sp.arxiv_id = rw.arxiv_id
     WHERE rw.run_rank <= rc.max_results
-      AND sp.arxiv_id IS NULL
 ),
 stage1 AS (
     SELECT
@@ -135,18 +135,6 @@ stage4 AS (
     LEFT JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
     WHERE sp.arxiv_id IS NULL
 ),
-stage5 AS (
-    SELECT
-        bp.arxiv_id,
-        bp.title,
-        bp.abstract,
-        bp.published_at,
-        bp.embedding,
-        5::smallint AS fallback_stage,
-        'all_seen_neutral'::text AS candidate_window
-    FROM base_papers bp
-    JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
-),
 all_candidates AS (
     SELECT * FROM stage0
     UNION ALL
@@ -157,8 +145,6 @@ all_candidates AS (
     SELECT * FROM stage3
     UNION ALL
     SELECT * FROM stage4
-    UNION ALL
-    SELECT * FROM stage5
 ),
 scored AS (
     SELECT
