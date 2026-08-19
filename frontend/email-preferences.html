@@ -6,7 +6,7 @@
   <link rel="icon" href="/static/favicon.png" type="image/png">
   <link rel="apple-touch-icon" href="/static/favicon.png">
   <title>Email preferences - ResearchPigeon</title>
-  <link rel="stylesheet" href="/static/styles.css?v=88">
+  <link rel="stylesheet" href="/static/styles.css?v=89">
 </head>
 <body data-document-title="Email preferences">
   <header class="topbar">
@@ -20,6 +20,15 @@
     <section class="panel email-preferences-panel">
       <h1 id="email-preferences-title">Email preferences</h1>
       <p id="email-preferences-message" class="muted"></p>
+      <form
+        id="email-unsubscribe-form"
+        class="email-unsubscribe-form hidden"
+        method="post"
+        action="/email/unsubscribe"
+      >
+        <input type="hidden" name="token" id="email-unsubscribe-token" value="">
+        <button type="submit" class="digest-feedback-cta-btn">Unsubscribe</button>
+      </form>
       <div class="email-preferences-footer">
         <a class="digest-feedback-cta-btn" href="/profiles">Manage preferences</a>
       </div>

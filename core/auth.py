@@ -199,20 +199,34 @@ def create_digest_login_token(email: str, conn=None) -> tuple[str, str]:
     return raw_token, user_id
 
 
-def login_from_digest_token(token: str, conn=None) -> tuple[str, str, str]:
+def resolve_digest_login_token(token: str, conn=None) -> tuple[str, str]:
     token_hash = _token_hash(token)
 
     with connection_scope(conn) as active_conn:
         with active_conn.cursor() as cur:
             cur.execute(FETCH_DIGEST_TOKEN_SQL, (token_hash,))
             row = cur.fetchone()
-            if row is None:
-                raise ValueError(MAGIC_LINK_INVALID_MESSAGE)
-            user_id = row[0]
-            email = row[1]
-            cur.execute(DELETE_EXPIRED_SESSIONS_SQL)
-            session_id = _insert_session(cur, user_id=user_id, email=email)
 
+    if row is None:
+        raise ValueError(MAGIC_LINK_INVALID_MESSAGE)
+    return row[0], row[1]
+
+
+def create_digest_login_session(*, user_id: str, email: str, conn=None) -> str:
+    with connection_scope(conn) as active_conn:
+        with active_conn.cursor() as cur:
+            cur.execute(DELETE_EXPIRED_SESSIONS_SQL)
+            return _insert_session(cur, user_id=user_id, email=email)
+
+
+def login_from_digest_token(token: str, conn=None) -> tuple[str, str, str]:
+    with connection_scope(conn) as active_conn:
+        user_id, email = resolve_digest_login_token(token, conn=active_conn)
+        session_id = create_digest_login_session(
+            user_id=user_id,
+            email=email,
+            conn=active_conn,
+        )
     return session_id, user_id, email
 
 

@@ -4,8 +4,9 @@ HTTP route definitions for the API service
 
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlencode
 
-from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi import FastAPI, Form, HTTPException, Request, Response
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -25,7 +26,10 @@ from api.dependencies import (
     get_metrics_payload,
     list_profile_keywords_payload,
     list_profiles_payload,
+    lookup_digest_login_payload,
+    lookup_unsubscribe_token_payload,
     logout_payload,
+    create_digest_login_session_payload,
     remove_profile_keyword_payload,
     request_magic_link_payload,
     remove_feedback_payload,
@@ -38,7 +42,6 @@ from api.dependencies import (
     update_email_settings_payload,
     reorder_profiles_payload,
     update_profile_payload,
-    verify_digest_login_payload,
     verify_magic_link_payload,
     _client_ip,
 )
@@ -93,6 +96,7 @@ from core.security import (
     resolve_safe_redirect_path,
 )
 from core.startup import validate_runtime_config
+from core.auth_messages import MAGIC_LINK_INVALID_MESSAGE
 
 
 ########################################
@@ -159,6 +163,18 @@ def _clear_auth_cookies(response: Response) -> None:
     )
 
 
+def _no_store_redirect(url: str) -> RedirectResponse:
+    response = RedirectResponse(url=url, status_code=302)
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+    return response
+
+
+def _apply_no_store(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Pragma"] = "no-cache"
+
+
 ########################################
 ################# UI ###################
 ########################################
@@ -208,20 +224,19 @@ def email_preferences_page() -> FileResponse:
 
 @app.get("/email/unsubscribe")
 def email_unsubscribe(token: str) -> RedirectResponse:
+    payload = lookup_unsubscribe_token_payload(token=token)
+    if payload["user_id"] is None:
+        return _no_store_redirect("/email/preferences?status=invalid")
+    query = urlencode({"status": "confirm", "token": token})
+    return _no_store_redirect(f"/email/preferences?{query}")
+
+
+@app.post("/email/unsubscribe")
+def email_unsubscribe_confirm(token: str = Form(...)) -> RedirectResponse:
     payload = unsubscribe_by_token_payload(token=token)
     if payload["user_id"] is None:
-        response = RedirectResponse(
-            url="/email/preferences?status=invalid",
-            status_code=302,
-        )
-    else:
-        response = RedirectResponse(
-            url="/email/preferences?status=unsubscribed",
-            status_code=302,
-        )
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Pragma"] = "no-cache"
-    return response
+        return _no_store_redirect("/email/preferences?status=invalid")
+    return _no_store_redirect("/email/preferences?status=unsubscribed")
 
 
 @app.get("/site-config")
@@ -271,9 +286,7 @@ def auth_verify_magic_link(
 ) -> RedirectResponse:
     payload = verify_magic_link_payload(token=token, client_ip=_client_ip(request))
     redirect_target = resolve_safe_redirect_path(next, email=payload["email"])
-    response = RedirectResponse(url=redirect_target, status_code=302)
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Pragma"] = "no-cache"
+    response = _no_store_redirect(redirect_target)
     _set_session_cookie(response, payload["session_id"])
     _set_csrf_cookie(response, token=generate_csrf_token())
     return response
@@ -287,20 +300,32 @@ def auth_digest_login(
 ) -> RedirectResponse:
     existing_session_id = request.cookies.get("session_id")
     existing = get_auth_session_payload(existing_session_id)
-    if existing["authenticated"] and existing_session_id:
-        redirect_target = resolve_safe_redirect_path(next, email=existing["email"])
-        response = RedirectResponse(url=redirect_target, status_code=302)
-        response.headers["Cache-Control"] = "no-store"
-        response.headers["Pragma"] = "no-cache"
-        _set_session_cookie(response, existing_session_id)
-        _ensure_authenticated_csrf(response, request, True)
-        return response
+    identity = lookup_digest_login_payload(token=token, client_ip=_client_ip(request))
 
-    payload = verify_digest_login_payload(token=token, client_ip=_client_ip(request))
+    if existing["authenticated"] and existing_session_id:
+        if identity is None or existing["user_id"] == identity["user_id"]:
+            redirect_target = resolve_safe_redirect_path(next, email=existing["email"])
+            response = _no_store_redirect(redirect_target)
+            _set_session_cookie(response, existing_session_id)
+            _ensure_authenticated_csrf(response, request, True)
+            return response
+
+    if identity is None:
+        raise HTTPException(status_code=400, detail=MAGIC_LINK_INVALID_MESSAGE)
+
+    payload = create_digest_login_session_payload(
+        user_id=identity["user_id"],
+        email=identity["email"],
+    )
+    if (
+        existing["authenticated"]
+        and existing_session_id
+        and existing["user_id"] != identity["user_id"]
+    ):
+        logout_payload(existing_session_id)
+
     redirect_target = resolve_safe_redirect_path(next, email=payload["email"])
-    response = RedirectResponse(url=redirect_target, status_code=302)
-    response.headers["Cache-Control"] = "no-store"
-    response.headers["Pragma"] = "no-cache"
+    response = _no_store_redirect(redirect_target)
     _set_session_cookie(response, payload["session_id"])
     _set_csrf_cookie(response, token=generate_csrf_token())
     return response
@@ -320,6 +345,7 @@ def auth_session(request: Request, response: Response) -> dict:
     if payload["authenticated"] and session_id:
         _set_session_cookie(response, session_id)
     _ensure_authenticated_csrf(response, request, payload["authenticated"])
+    _apply_no_store(response)
     return payload
 
 

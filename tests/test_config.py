@@ -205,3 +205,15 @@ def test_is_database_rate_limit_enabled_defaults_to_production(monkeypatch):
 
     monkeypatch.setenv("APP_ENV", "development")
     assert config.is_database_rate_limit_enabled() is False
+
+
+def test_get_trusted_proxy_ips_defaults_to_localhost(monkeypatch):
+    monkeypatch.delenv("TRUSTED_PROXY_IPS", raising=False)
+    assert config.get_trusted_proxy_ips() == frozenset({"127.0.0.1", "::1"})
+
+
+def test_get_trusted_proxy_ips_parses_and_strips_brackets(monkeypatch):
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "127.0.0.1, [::1], 10.0.0.2 ")
+    assert config.get_trusted_proxy_ips() == frozenset(
+        {"127.0.0.1", "::1", "10.0.0.2"}
+    )

@@ -24,7 +24,6 @@ from api.schemas import (
 )
 from api.services.auth import (
     request_magic_link_payload as request_magic_link_payload_service,
-    verify_digest_login_payload as verify_digest_login_payload_service,
     verify_magic_link_payload as verify_magic_link_payload_service,
 )
 from api.services.common import resolve_profile
@@ -61,10 +60,11 @@ from api.services.email_settings import (
 )
 from api.unit_of_work import ApiUnitOfWork, open_api_unit_of_work
 from core.auth import (
+    create_digest_login_session,
     create_magic_link,
     get_session_user,
-    login_from_digest_token,
     refresh_session,
+    resolve_digest_login_token,
     revoke_session,
     verify_magic_link,
 )
@@ -75,6 +75,7 @@ from core.config import (
     get_magic_link_request_limit_per_ip,
     get_magic_link_verify_limit_per_ip,
     get_rate_limit_window_seconds,
+    get_trusted_proxy_ips,
     is_debug_features_enabled,
     is_dev_magic_link_response_enabled,
     is_trust_proxy_headers_enabled,
@@ -86,6 +87,7 @@ from core.email_settings import (
     ensure_email_settings,
     get_digest_subscribed,
     get_email_settings,
+    resolve_user_id_from_token,
     set_digest_subscribed,
     unsubscribe_by_token,
 )
@@ -147,17 +149,30 @@ def require_debug_admin(request: Request) -> str:
     return str(session["email"])
 
 
+def _normalize_connecting_ip(host: str) -> str:
+    return host.strip().strip("[]")
+
+
 def _client_ip(request: Request) -> str:
-    if is_trust_proxy_headers_enabled():
+    connecting_ip = (
+        _normalize_connecting_ip(request.client.host)
+        if request.client is not None
+        else None
+    )
+    if (
+        is_trust_proxy_headers_enabled()
+        and connecting_ip is not None
+        and connecting_ip in get_trusted_proxy_ips()
+    ):
         forwarded_for = request.headers.get("X-Forwarded-For", "").strip()
         if forwarded_for:
             return forwarded_for.split(",", 1)[0].strip()
         real_ip = request.headers.get("X-Real-IP", "").strip()
         if real_ip:
             return real_ip
-    if request.client is None:
+    if connecting_ip is None:
         return "unknown"
-    return request.client.host
+    return connecting_ip
 
 
 def _enforce_magic_link_request_limits(email: str, client_ip: str) -> None:
@@ -253,23 +268,44 @@ def verify_magic_link_payload(
         raise _to_http_exception(error) from error
 
 
-def verify_digest_login_payload(
+def lookup_digest_login_payload(
     token: str,
     client_ip: str,
     uow: ApiUnitOfWork | None = None,
     conn=None,
-) -> dict:
+) -> dict | None:
     try:
         _enforce_digest_login_verify_limit(client_ip)
         with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
-            return verify_digest_login_payload_service(
+            user_id, email = resolve_digest_login_token(
                 token=token,
-                login_from_digest_token=lambda value: login_from_digest_token(
-                    token=value, conn=active_uow.conn
-                ),
+                conn=active_uow.conn,
             )
-    except ValueError as error:
+        return {"user_id": user_id, "email": email}
+    except RateLimitExceeded as error:
         raise _to_http_exception(error) from error
+    except ValueError:
+        return None
+
+
+def create_digest_login_session_payload(
+    user_id: str,
+    email: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+        session_id = create_digest_login_session(
+            user_id=user_id,
+            email=email,
+            conn=active_uow.conn,
+        )
+    return {
+        "verified": True,
+        "session_id": session_id,
+        "user_id": user_id,
+        "email": email,
+    }
 
 
 def logout_payload(session_id: str | None, conn=None) -> dict:
@@ -771,6 +807,16 @@ def update_email_settings_payload(
             )
     except ValueError as error:
         raise _to_http_exception(error) from error
+
+
+def lookup_unsubscribe_token_payload(
+    token: str,
+    uow: ApiUnitOfWork | None = None,
+    conn=None,
+) -> dict:
+    with open_api_unit_of_work(uow=uow, conn=conn) as active_uow:
+        user_id = resolve_user_id_from_token(token, conn=active_uow.conn)
+    return {"user_id": user_id}
 
 
 def unsubscribe_by_token_payload(

@@ -141,7 +141,17 @@ def test_digest_login_redirect_rejects_unlisted_paths(monkeypatch):
     )
     monkeypatch.setattr(
         routes,
-        "verify_digest_login_payload",
+        "lookup_digest_login_payload",
+        Mock(
+            return_value={
+                "user_id": "x@example.com",
+                "email": "x@example.com",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "create_digest_login_session_payload",
         Mock(
             return_value={
                 "verified": True,
@@ -361,6 +371,59 @@ def test_mutating_route_accepts_matching_csrf_token(monkeypatch):
     assert response.status_code == 200
 
 
+def test_logout_requires_csrf_when_enabled(monkeypatch):
+    monkeypatch.delenv("DISABLE_CSRF", raising=False)
+    client = TestClient(routes.app)
+    client.cookies.set("session_id", "session-123")
+
+    response = client.post("/auth/logout")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "CSRF validation failed"
+
+
+def test_logout_accepts_matching_csrf_token(monkeypatch):
+    monkeypatch.delenv("DISABLE_CSRF", raising=False)
+    monkeypatch.setattr(routes, "logout_payload", Mock(return_value={"logged_out": True}))
+    client = TestClient(routes.app)
+    client.cookies.set("session_id", "session-123")
+    client.cookies.set("csrf_token", "csrf-abc")
+
+    response = client.post("/auth/logout", headers={"X-CSRF-Token": "csrf-abc"})
+
+    assert response.status_code == 200
+    assert response.json() == {"logged_out": True}
+
+
+def test_email_settings_update_requires_csrf_when_enabled(monkeypatch):
+    monkeypatch.delenv("DISABLE_CSRF", raising=False)
+    client = TestClient(routes.app)
+    client.cookies.set("session_id", "session-123")
+
+    response = client.patch("/api/email-settings", json={"digest_subscribed": False})
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "CSRF validation failed"
+
+
+def test_email_unsubscribe_post_is_csrf_exempt(monkeypatch):
+    monkeypatch.delenv("DISABLE_CSRF", raising=False)
+    monkeypatch.setattr(
+        routes,
+        "unsubscribe_by_token_payload",
+        Mock(return_value={"user_id": "reader@example.com"}),
+    )
+    client = TestClient(routes.app)
+    response = client.post(
+        "/email/unsubscribe",
+        data={"token": "abc123"},
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/email/preferences?status=unsubscribed"
+
+
 def test_magic_link_request_omits_link_without_dev_flag(monkeypatch, fake_api_uow):
     monkeypatch.delenv("ALLOW_DEV_MAGIC_LINK_RESPONSE", raising=False)
     monkeypatch.setattr(
@@ -534,6 +597,7 @@ def test_auth_session_exposes_can_debug_access_for_admin(monkeypatch):
     assert response.status_code == 200
     assert response.json()["can_debug_access"] is True
     assert "session_id=session-admin" in response.headers["set-cookie"]
+    assert response.headers["Cache-Control"] == "no-store"
 
 
 def test_security_headers_are_present(monkeypatch):
@@ -565,3 +629,55 @@ def test_resolve_safe_redirect_path(next_path, email, expected, monkeypatch):
     monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
     monkeypatch.setenv("DEBUG_ADMIN_EMAILS", "admin@example.com")
     assert resolve_safe_redirect_path(next_path, email=email) == expected
+
+
+def _request_with_client(client_host: str | None, extra_headers: list[tuple[bytes, bytes]]):
+    from starlette.requests import Request
+
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0"},
+        "http_version": "1.1",
+        "method": "GET",
+        "scheme": "http",
+        "path": "/",
+        "raw_path": b"/",
+        "query_string": b"",
+        "headers": extra_headers,
+        "client": (client_host, 1234) if client_host is not None else None,
+        "server": ("testserver", 80),
+    }
+    return Request(scope)
+
+
+def test_client_ip_ignores_forwarded_for_from_untrusted_peer(monkeypatch):
+    monkeypatch.setenv("TRUST_PROXY_HEADERS", "1")
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1")
+    request = _request_with_client(
+        "203.0.113.9",
+        [(b"x-forwarded-for", b"9.9.9.9")],
+    )
+
+    assert dependencies._client_ip(request) == "203.0.113.9"
+
+
+def test_client_ip_uses_forwarded_for_from_trusted_proxy(monkeypatch):
+    monkeypatch.setenv("TRUST_PROXY_HEADERS", "1")
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "127.0.0.1,::1")
+    request = _request_with_client(
+        "127.0.0.1",
+        [(b"x-forwarded-for", b"203.0.113.10, 10.0.0.1")],
+    )
+
+    assert dependencies._client_ip(request) == "203.0.113.10"
+
+
+def test_client_ip_ignores_forwarded_for_when_proxy_trust_disabled(monkeypatch):
+    monkeypatch.delenv("TRUST_PROXY_HEADERS", raising=False)
+    monkeypatch.setenv("TRUSTED_PROXY_IPS", "127.0.0.1")
+    request = _request_with_client(
+        "127.0.0.1",
+        [(b"x-forwarded-for", b"9.9.9.9")],
+    )
+
+    assert dependencies._client_ip(request) == "127.0.0.1"

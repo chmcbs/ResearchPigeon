@@ -48,3 +48,50 @@ def test_check_rate_limit_uses_database_backend_when_enabled(monkeypatch):
     check_rate_limit("db-key", max_attempts=3, window_seconds=60)
 
     assert calls == ["db-key"]
+
+
+def test_check_rate_limit_database_inserts_event(monkeypatch):
+    from unittest.mock import MagicMock
+
+    import core.rate_limit as rate_limit_module
+
+    monkeypatch.setattr(rate_limit_module, "is_database_rate_limit_enabled", lambda: True)
+    monkeypatch.setattr(rate_limit_module, "get_database_url", lambda: "postgresql://example")
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (0,)
+    connection = MagicMock()
+    connection.cursor.return_value.__enter__.return_value = cursor
+    connect = MagicMock()
+    connect.return_value.__enter__.return_value = connection
+    monkeypatch.setattr(rate_limit_module.psycopg, "connect", connect)
+
+    check_rate_limit("db-key", max_attempts=3, window_seconds=60)
+
+    executed_sql = [call.args[0] for call in cursor.execute.call_args_list]
+    assert any("INSERT INTO rate_limit_events" in sql for sql in executed_sql)
+    assert cursor.execute.call_args.args == (
+        rate_limit_module.INSERT_RATE_LIMIT_EVENT_SQL,
+        ("db-key",),
+    )
+
+
+def test_check_rate_limit_database_blocks_when_at_limit(monkeypatch):
+    from unittest.mock import MagicMock
+
+    import core.rate_limit as rate_limit_module
+
+    monkeypatch.setattr(rate_limit_module, "is_database_rate_limit_enabled", lambda: True)
+    monkeypatch.setattr(rate_limit_module, "get_database_url", lambda: "postgresql://example")
+    cursor = MagicMock()
+    cursor.fetchone.return_value = (2,)
+    connection = MagicMock()
+    connection.cursor.return_value.__enter__.return_value = cursor
+    connect = MagicMock()
+    connect.return_value.__enter__.return_value = connection
+    monkeypatch.setattr(rate_limit_module.psycopg, "connect", connect)
+
+    with pytest.raises(RateLimitExceeded, match="Too many sign-in attempts"):
+        check_rate_limit("db-key", max_attempts=2, window_seconds=60)
+
+    executed_sql = [call.args[0] for call in cursor.execute.call_args_list]
+    assert not any("INSERT INTO rate_limit_events" in sql for sql in executed_sql)

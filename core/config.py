@@ -159,6 +159,19 @@ def is_trust_proxy_headers_enabled() -> bool:
     return _env_flag_enabled("TRUST_PROXY_HEADERS")
 
 
+def _normalize_ip(value: str) -> str:
+    return value.strip().strip("[]")
+
+
+def get_trusted_proxy_ips() -> frozenset[str]:
+    raw = os.getenv("TRUSTED_PROXY_IPS")
+    if raw is None:
+        return frozenset({"127.0.0.1", "::1"})
+    return frozenset(
+        _normalize_ip(part) for part in raw.split(",") if part.strip()
+    )
+
+
 # Debugging
 def is_debug_digest_data_reset_enabled() -> bool:
     raw = os.getenv("ALLOW_DEBUG_DIGEST_DATA_RESET", "")

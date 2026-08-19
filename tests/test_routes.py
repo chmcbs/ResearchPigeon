@@ -369,7 +369,17 @@ def test_digest_login_sets_session_cookie_when_logged_out(monkeypatch):
     )
     monkeypatch.setattr(
         routes,
-        "verify_digest_login_payload",
+        "lookup_digest_login_payload",
+        Mock(
+            return_value={
+                "user_id": "reader@example.com",
+                "email": "reader@example.com",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "create_digest_login_session_payload",
         Mock(
             return_value={
                 "verified": True,
@@ -391,7 +401,7 @@ def test_digest_login_sets_session_cookie_when_logged_out(monkeypatch):
 
 
 def test_digest_login_keeps_existing_session(monkeypatch):
-    verify = Mock()
+    create = Mock()
     monkeypatch.setattr(
         routes,
         "get_auth_session_payload",
@@ -404,7 +414,17 @@ def test_digest_login_keeps_existing_session(monkeypatch):
             }
         ),
     )
-    monkeypatch.setattr(routes, "verify_digest_login_payload", verify)
+    monkeypatch.setattr(
+        routes,
+        "lookup_digest_login_payload",
+        Mock(
+            return_value={
+                "user_id": "reader@example.com",
+                "email": "reader@example.com",
+            }
+        ),
+    )
+    monkeypatch.setattr(routes, "create_digest_login_session_payload", create)
     client = TestClient(routes.app)
     client.cookies.set("session_id", "existing-session")
     response = client.get(
@@ -415,18 +435,119 @@ def test_digest_login_keeps_existing_session(monkeypatch):
     assert response.status_code == 302
     assert response.headers["location"] == "/papers"
     assert "session_id=existing-session" in response.headers["set-cookie"]
-    verify.assert_not_called()
+    create.assert_not_called()
 
 
-def test_email_unsubscribe_redirects_to_preferences(monkeypatch):
+def test_digest_login_keeps_existing_session_when_token_invalid(monkeypatch):
+    create = Mock()
+    monkeypatch.setattr(
+        routes,
+        "get_auth_session_payload",
+        Mock(
+            return_value={
+                "authenticated": True,
+                "user_id": "reader@example.com",
+                "email": "reader@example.com",
+                "can_debug_access": False,
+            }
+        ),
+    )
+    monkeypatch.setattr(routes, "lookup_digest_login_payload", Mock(return_value=None))
+    monkeypatch.setattr(routes, "create_digest_login_session_payload", create)
+    client = TestClient(routes.app)
+    client.cookies.set("session_id", "existing-session")
+    response = client.get(
+        "/auth/digest-login?token=expired&next=/papers",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/papers"
+    assert "session_id=existing-session" in response.headers["set-cookie"]
+    create.assert_not_called()
+
+
+def test_digest_login_switches_when_existing_session_is_different_user(monkeypatch):
+    logout = Mock(return_value={"logged_out": True})
+    monkeypatch.setattr(
+        routes,
+        "get_auth_session_payload",
+        Mock(
+            return_value={
+                "authenticated": True,
+                "user_id": "bob@example.com",
+                "email": "bob@example.com",
+                "can_debug_access": False,
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "lookup_digest_login_payload",
+        Mock(
+            return_value={
+                "user_id": "alice@example.com",
+                "email": "alice@example.com",
+            }
+        ),
+    )
+    monkeypatch.setattr(
+        routes,
+        "create_digest_login_session_payload",
+        Mock(
+            return_value={
+                "verified": True,
+                "session_id": "session-alice",
+                "user_id": "alice@example.com",
+                "email": "alice@example.com",
+            }
+        ),
+    )
+    monkeypatch.setattr(routes, "logout_payload", logout)
+    client = TestClient(routes.app)
+    client.cookies.set("session_id", "bob-session")
+    response = client.get(
+        "/auth/digest-login?token=alice-token&next=/papers",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == "/papers"
+    assert "session_id=session-alice" in response.headers["set-cookie"]
+    logout.assert_called_once_with("bob-session")
+
+
+def test_email_unsubscribe_get_confirms_without_mutating(monkeypatch):
+    unsubscribe = Mock()
+    monkeypatch.setattr(
+        routes,
+        "lookup_unsubscribe_token_payload",
+        Mock(return_value={"user_id": "reader@example.com"}),
+    )
+    monkeypatch.setattr(routes, "unsubscribe_by_token_payload", unsubscribe)
+    client = TestClient(routes.app)
+    response = client.get(
+        "/email/unsubscribe?token=abc123",
+        follow_redirects=False,
+    )
+
+    assert response.status_code == 302
+    assert response.headers["location"] == (
+        "/email/preferences?status=confirm&token=abc123"
+    )
+    unsubscribe.assert_not_called()
+
+
+def test_email_unsubscribe_post_unsubscribes(monkeypatch):
     monkeypatch.setattr(
         routes,
         "unsubscribe_by_token_payload",
         Mock(return_value={"user_id": "reader@example.com"}),
     )
     client = TestClient(routes.app)
-    response = client.get(
-        "/email/unsubscribe?token=abc123",
+    response = client.post(
+        "/email/unsubscribe",
+        data={"token": "abc123"},
         follow_redirects=False,
     )
 
@@ -437,7 +558,7 @@ def test_email_unsubscribe_redirects_to_preferences(monkeypatch):
 def test_email_unsubscribe_invalid_token_redirects_to_error_state(monkeypatch):
     monkeypatch.setattr(
         routes,
-        "unsubscribe_by_token_payload",
+        "lookup_unsubscribe_token_payload",
         Mock(return_value={"user_id": None}),
     )
     client = TestClient(routes.app)

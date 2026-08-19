@@ -145,6 +145,18 @@ def test_login_from_digest_token_does_not_kick_other_devices(monkeypatch):
     assert insert_params[0] == "session-123"
 
 
+def test_resolve_digest_login_token_returns_user(monkeypatch):
+    cursor = MagicMock()
+    cursor.fetchone.return_value = ("user@example.com", "user@example.com")
+    monkeypatch.setattr(db_module.psycopg, "connect", _mock_connection_with_cursor(cursor))
+
+    user_id, email = auth.resolve_digest_login_token("digest-token")
+
+    assert user_id == "user@example.com"
+    assert email == "user@example.com"
+    assert cursor.execute.call_args.args[0] == auth.FETCH_DIGEST_TOKEN_SQL
+
+
 def test_login_from_digest_token_rejects_missing_token(monkeypatch):
     cursor = MagicMock()
     cursor.fetchone.return_value = None

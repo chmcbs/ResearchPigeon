@@ -14,7 +14,7 @@ UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 CSRF_EXEMPT_PATHS = frozenset(
     {
         "/auth/magic-link/request",
-        "/auth/magic-link/verify",
+        "/email/unsubscribe",
     }
 )
 
