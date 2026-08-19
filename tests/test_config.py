@@ -171,6 +171,11 @@ def test_get_llm_provider_name_defaults_to_mock(monkeypatch):
     assert config.get_llm_provider_name() == "mock"
 
 
+def test_get_llm_prompt_version_defaults_to_current_prompt(monkeypatch):
+    monkeypatch.delenv("LLM_PROMPT_VERSION", raising=False)
+    assert config.get_llm_prompt_version() == 2
+
+
 def test_openai_getters_use_defaults(monkeypatch):
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_BASE_URL", raising=False)

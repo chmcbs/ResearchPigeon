@@ -2,8 +2,16 @@
 #   docker compose -f docker-compose.yml -f docker-compose.prod.yml up --build
 #
 # Required host env vars: APP_BASE_URL, SMTP_HOST, EMAIL_FROM, EMAIL_UNSUBSCRIBE_SECRET
-# For OpenAI blurbs: OPENAI_API_KEY (LLM_PROVIDER defaults to openai)
+# For paper blurbs: OPENAI_API_KEY (LLM_PROVIDER is always openai)
 # Optional: POSTGRES_PASSWORD (defaults to postgres for single-node compose)
+#
+# VPS cutover (this overlay is not a full VPS config yet):
+# - Do not copy local SMTP_HOST=mailpit. Point SMTP_* at a real mail provider
+#   or login links and digests never reach users.
+# - Mailpit still starts because it lives in docker-compose.yml. Stop it for
+#   prod (move the service to docker-compose.override.yml, or add a profile).
+# - Bind API to 127.0.0.1:8000 (or do not publish 8000) and put Caddy/nginx in
+#   front. Unpublish Mailpit 8025/1025. Set a real POSTGRES_PASSWORD.
 services:
   db:
     restart: unless-stopped
@@ -26,11 +34,15 @@ services:
       EMAIL_UNSUBSCRIBE_SECRET: ${EMAIL_UNSUBSCRIBE_SECRET:?EMAIL_UNSUBSCRIBE_SECRET is required}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-1}
       DEBUG_ADMIN_EMAILS: ${DEBUG_ADMIN_EMAILS:-}
-      ALLOW_DEBUG_FEATURES: ${ALLOW_DEBUG_FEATURES:-0}
+      ALLOW_DEBUG_FEATURES: "0"
+      ALLOW_DEBUG_DIGEST_DATA_RESET: "0"
+      DISABLE_CSRF: "0"
+      DISABLE_RATE_LIMIT: "0"
       INGESTION_MAX_RESULTS: ${INGESTION_MAX_RESULTS:-150}
       EMBEDDING_LIMIT: ${EMBEDDING_LIMIT:-600}
       DAILY_PICKS_GENERATE_LIMIT_PER_USER: ${DAILY_PICKS_GENERATE_LIMIT_PER_USER:-5}
-      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      LLM_PROVIDER: openai
+      LLM_PROMPT_VERSION: ${LLM_PROMPT_VERSION:-2}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-nano}
@@ -48,7 +60,15 @@ services:
       EMAIL_FROM: ${EMAIL_FROM:?EMAIL_FROM is required}
       EMAIL_UNSUBSCRIBE_SECRET: ${EMAIL_UNSUBSCRIBE_SECRET:?EMAIL_UNSUBSCRIBE_SECRET is required}
       DEBUG_ADMIN_EMAILS: ${DEBUG_ADMIN_EMAILS:-}
-      LLM_PROVIDER: ${LLM_PROVIDER:-openai}
+      ALLOW_DEV_MAGIC_LINK_RESPONSE: "0"
+      ALLOW_DEBUG_FEATURES: "0"
+      ALLOW_DEBUG_DIGEST_DATA_RESET: "0"
+      DISABLE_CSRF: "0"
+      DISABLE_RATE_LIMIT: "0"
+      INGESTION_MAX_RESULTS: ${INGESTION_MAX_RESULTS:-150}
+      EMBEDDING_LIMIT: ${EMBEDDING_LIMIT:-600}
+      LLM_PROVIDER: openai
+      LLM_PROMPT_VERSION: ${LLM_PROMPT_VERSION:-2}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
       OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-nano}

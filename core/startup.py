@@ -9,6 +9,7 @@ from core.config import (
     get_llm_provider_name,
     get_openai_api_key,
     is_app_https,
+    is_debug_features_enabled,
     is_dev_magic_link_response_enabled,
     is_email_delivery_configured,
     is_production,
@@ -53,6 +54,11 @@ def validate_runtime_config() -> None:
     if is_dev_magic_link_response_enabled():
         raise StartupConfigError(
             "ALLOW_DEV_MAGIC_LINK_RESPONSE must not be set when APP_ENV is production"
+        )
+
+    if is_debug_features_enabled():
+        raise StartupConfigError(
+            "ALLOW_DEBUG_FEATURES must not be set when APP_ENV is production"
         )
 
     if not is_email_delivery_configured():

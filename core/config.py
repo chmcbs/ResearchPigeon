@@ -302,7 +302,7 @@ def get_llm_request_timeout_s() -> int:
 
 
 def get_llm_prompt_version() -> int:
-    return max(1, int(os.getenv("LLM_PROMPT_VERSION", "1")))
+    return max(1, int(os.getenv("LLM_PROMPT_VERSION", "2")))
 
 
 def get_llm_abstract_max_chars() -> int:

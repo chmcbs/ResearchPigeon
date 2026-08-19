@@ -18,20 +18,6 @@ services:
       retries: 10
       start_period: 10s
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: researchpigeon-ollama
-    ports:
-      - "11434:11434"
-    volumes:
-      - ollama_data:/root/.ollama
-    healthcheck:
-      test: ["CMD", "ollama", "list"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-      start_period: 20s
-
   mailpit:
     image: axllent/mailpit:latest
     container_name: researchpigeon-mailpit
@@ -54,9 +40,10 @@ services:
       ALLOW_DEV_MAGIC_LINK_RESPONSE: ${ALLOW_DEV_MAGIC_LINK_RESPONSE:-1}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
       ALLOW_DEBUG_FEATURES: ${ALLOW_DEBUG_FEATURES:-0}
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
-      LLM_MODEL: ${LLM_MODEL:-llama3.2:3b}
+      LLM_PROVIDER: openai
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-nano}
       LLM_BATCH_CONCURRENCY: ${LLM_BATCH_CONCURRENCY:-1}
       LLM_BATCH_TIMEOUT_S: ${LLM_BATCH_TIMEOUT_S:-600}
       LLM_REQUEST_TIMEOUT_S: ${LLM_REQUEST_TIMEOUT_S:-120}
@@ -66,8 +53,6 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      ollama:
-        condition: service_started
       mailpit:
         condition: service_started
     healthcheck:
@@ -95,9 +80,10 @@ services:
       DATABASE_URL: postgresql://postgres:postgres@db:5432/researchpigeon
       DEBUG_ADMIN_EMAILS: ${DEBUG_ADMIN_EMAILS:-}
       APP_BASE_URL: ${APP_BASE_URL:-http://localhost:8000}
-      LLM_PROVIDER: ${LLM_PROVIDER:-ollama}
-      LLM_BASE_URL: ${LLM_BASE_URL:-http://ollama:11434}
-      LLM_MODEL: ${LLM_MODEL:-llama3.2:3b}
+      LLM_PROVIDER: openai
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-https://api.openai.com/v1}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4.1-nano}
       LLM_BATCH_CONCURRENCY: ${LLM_BATCH_CONCURRENCY:-1}
       LLM_BATCH_TIMEOUT_S: ${LLM_BATCH_TIMEOUT_S:-600}
       LLM_REQUEST_TIMEOUT_S: ${LLM_REQUEST_TIMEOUT_S:-120}
@@ -111,11 +97,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      ollama:
-        condition: service_started
+      api:
+        condition: service_healthy
       mailpit:
         condition: service_started
 
 volumes:
   postgres_data:
-  ollama_data:

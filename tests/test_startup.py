@@ -16,6 +16,8 @@ def _set_valid_production_env(monkeypatch) -> None:
     monkeypatch.delenv("DISABLE_CSRF", raising=False)
     monkeypatch.delenv("DISABLE_RATE_LIMIT", raising=False)
     monkeypatch.delenv("ALLOW_DEV_MAGIC_LINK_RESPONSE", raising=False)
+    monkeypatch.delenv("ALLOW_DEBUG_FEATURES", raising=False)
+    monkeypatch.delenv("ALLOW_DEBUG_DIGEST_DATA_RESET", raising=False)
     monkeypatch.setenv("SMTP_HOST", "smtp.example.com")
     monkeypatch.setenv("EMAIL_FROM", "noreply@example.com")
     monkeypatch.setenv("EMAIL_UNSUBSCRIBE_SECRET", "y" * 32)
@@ -83,6 +85,25 @@ def test_validate_runtime_config_rejects_dev_magic_link_in_production(monkeypatc
     monkeypatch.setenv("ALLOW_DEV_MAGIC_LINK_RESPONSE", "1")
 
     with pytest.raises(StartupConfigError, match="ALLOW_DEV_MAGIC_LINK_RESPONSE"):
+        validate_runtime_config()
+
+
+def test_validate_runtime_config_rejects_debug_features_in_production(monkeypatch):
+    _set_valid_production_env(monkeypatch)
+    monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
+
+    with pytest.raises(StartupConfigError, match="ALLOW_DEBUG_FEATURES"):
+        validate_runtime_config()
+
+
+def test_validate_runtime_config_rejects_debug_reset_fallback_in_production(
+    monkeypatch,
+):
+    _set_valid_production_env(monkeypatch)
+    monkeypatch.delenv("ALLOW_DEBUG_FEATURES", raising=False)
+    monkeypatch.setenv("ALLOW_DEBUG_DIGEST_DATA_RESET", "1")
+
+    with pytest.raises(StartupConfigError, match="ALLOW_DEBUG_FEATURES"):
         validate_runtime_config()
 
 
