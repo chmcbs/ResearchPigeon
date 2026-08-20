@@ -140,6 +140,27 @@ async function updateDigestSelection() {
   });
 }
 
+async function persistDigestSelectionIfAllowed() {
+  if (!digestSubscribed) {
+    return;
+  }
+  await updateDigestSelection();
+}
+
+function profileUpdateBody({ profile_name, category, digest_enabled }) {
+  const body = {};
+  if (profile_name !== undefined) {
+    body.profile_name = profile_name;
+  }
+  if (category !== undefined) {
+    body.category = category;
+  }
+  if (digestSubscribed && digest_enabled !== undefined) {
+    body.digest_enabled = digest_enabled;
+  }
+  return body;
+}
+
 function orderedProfilesForDisplay() {
   const saved = profiles
     .filter((item) => !item.is_draft)
@@ -741,11 +762,15 @@ function renderProfiles(options = {}) {
             );
             createdProfile.keywords = keywordPayload.keywords;
           }
-          const updatePayload = await apiRequest(`/api/profiles/${createdProfile.profile_id}`, "PUT", {
-            profile_name: profileTitleInput.value,
-            category: categorySelect.value,
-            digest_enabled: digestCheckbox.checked,
-          });
+          const updatePayload = await apiRequest(
+            `/api/profiles/${createdProfile.profile_id}`,
+            "PUT",
+            profileUpdateBody({
+              profile_name: profileTitleInput.value,
+              category: categorySelect.value,
+              digest_enabled: digestCheckbox.checked,
+            }),
+          );
           createdProfile = updatePayload.profile;
           // Clear draft flag on the in-memory card before syncing digest selection; otherwise
           // getSelectedProfileIds() skips drafts and digest-selection disables this profile.
@@ -763,7 +788,7 @@ function renderProfiles(options = {}) {
               is_draft: false,
             });
           }
-          await updateDigestSelection();
+          await persistDigestSelectionIfAllowed();
           await loadProfiles();
           setStatus("", false);
         } catch (error) {
@@ -779,14 +804,18 @@ function renderProfiles(options = {}) {
       saveBtn.setAttribute("aria-busy", "true");
       saveBtn.textContent = "Saving…";
       try {
-        const updatePayload = await apiRequest(`/api/profiles/${profile.profile_id}`, "PUT", {
-          profile_name: profileTitleInput.value,
-          digest_enabled: digestCheckbox.checked,
-        });
+        const updatePayload = await apiRequest(
+          `/api/profiles/${profile.profile_id}`,
+          "PUT",
+          profileUpdateBody({
+            profile_name: profileTitleInput.value,
+            digest_enabled: digestCheckbox.checked,
+          }),
+        );
         profile.profile_name = updatePayload.profile.profile_name;
         profile.digest_enabled = updatePayload.profile.digest_enabled;
         profile.is_editing = false;
-        await updateDigestSelection();
+        await persistDigestSelectionIfAllowed();
         renderProfiles();
         setStatus("", false);
       } catch (error) {
@@ -841,7 +870,7 @@ function renderProfiles(options = {}) {
       try {
         await apiRequest(`/api/profiles/${profile.profile_id}`, "DELETE");
         profiles = profiles.filter((item) => item.profile_id !== profile.profile_id);
-        await updateDigestSelection();
+        await persistDigestSelectionIfAllowed();
         renderProfiles();
         setStatus("", false);
       } catch (error) {
