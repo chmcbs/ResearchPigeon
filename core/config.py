@@ -15,7 +15,7 @@ _CATEGORY_LABELS_PATH = (
     Path(__file__).resolve().parent.parent / "data" / "arxiv_category_labels.json"
 )
 
-DEFAULT_DAILY_K = int(os.getenv("DAILY_PICKS_K", "3"))
+DEFAULT_DAILY_K = int(os.getenv("DAILY_PICKS_K", "1"))
 DEFAULT_INTEREST_TEXT = os.getenv(
     "DEFAULT_INTEREST_TEXT",
     "I'm interested in learning about artificial intelligence research.",

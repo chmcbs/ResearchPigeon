@@ -84,10 +84,10 @@ def fetch_papers(
     category: str = "cs.AI",
     max_results: int | None = None,
     # SubmittedDate sorts by the v1 original submission date (paper.published /
-    # published_at), NOT by latest version activity. This is intentional: it keeps
-    # the ingestion fetch window on the same clock the recommendation recency
-    # windows use (published_at). Do not switch this to LastUpdatedDate, which
-    # would order by paper.updated/updated_at and silently desync the two stages.
+    # published_at), NOT by latest version activity. Ranking recency windows
+    # (7d / 30d / 1y) use the same published_at clock. Do not switch this to
+    # LastUpdatedDate, which would order by paper.updated/updated_at and
+    # silently desync ingest from ranking. max_results is fetch size only.
     sort_by: arxiv.SortCriterion = arxiv.SortCriterion.SubmittedDate,
     sort_order: arxiv.SortOrder = arxiv.SortOrder.Descending,
     *,

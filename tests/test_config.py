@@ -68,8 +68,10 @@ def test_format_arxiv_category_label_falls_back_to_id(monkeypatch):
     assert config.format_arxiv_category_label("cs.ZZ") == "cs.ZZ"
 
 
-def test_get_daily_picks_k_uses_default():
-    assert config.get_daily_picks_k() >= 1
+def test_get_daily_picks_k_uses_default(monkeypatch):
+    monkeypatch.delenv("DAILY_PICKS_K", raising=False)
+    monkeypatch.setattr(config, "DEFAULT_DAILY_K", 1)
+    assert config.get_daily_picks_k() == 1
 
 
 def test_get_daily_picks_k_rejects_invalid_value(monkeypatch):

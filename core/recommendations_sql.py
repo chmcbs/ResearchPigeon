@@ -17,9 +17,13 @@ FROM profile_preferences
 WHERE profile_id = %s;
 """
 
+# Primary window is the last 7 days of unseen papers in the run's category.
+# 30d / 1y / all only fill leftover K slots when that week cannot. Ingest
+# max_results is not a ranking cap. A future minimum-score filter would skip
+# weak 7d matches and make the later stages fire more often.
 RANK_CANDIDATES_SQL = f"""
 WITH run_context AS (
-    SELECT category, max_results
+    SELECT category
     FROM runs
     WHERE run_id = %s
       AND status IN ('completed', 'failed')
@@ -57,28 +61,19 @@ base_papers AS (
     LEFT JOIN feedback_excluded fe ON fe.arxiv_id = p.arxiv_id
     WHERE fe.arxiv_id IS NULL
 ),
-run_window AS (
-    SELECT
-        bp.*,
-        ROW_NUMBER() OVER (
-            ORDER BY bp.published_at DESC NULLS LAST, bp.arxiv_id ASC
-        ) AS run_rank
-    FROM base_papers bp
-    LEFT JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
-    WHERE sp.arxiv_id IS NULL
-),
 stage0 AS (
     SELECT
-        rw.arxiv_id,
-        rw.title,
-        rw.abstract,
-        rw.published_at,
-        rw.embedding,
+        bp.arxiv_id,
+        bp.title,
+        bp.abstract,
+        bp.published_at,
+        bp.embedding,
         0::smallint AS fallback_stage,
-        'run'::text AS candidate_window
-    FROM run_window rw
-    CROSS JOIN run_context rc
-    WHERE rw.run_rank <= rc.max_results
+        '7d'::text AS candidate_window
+    FROM base_papers bp
+    LEFT JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
+    WHERE bp.published_at >= NOW() - INTERVAL '7 days'
+      AND sp.arxiv_id IS NULL
 ),
 stage1 AS (
     SELECT
@@ -88,10 +83,10 @@ stage1 AS (
         bp.published_at,
         bp.embedding,
         1::smallint AS fallback_stage,
-        '7d'::text AS candidate_window
+        '30d'::text AS candidate_window
     FROM base_papers bp
     LEFT JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
-    WHERE bp.published_at >= NOW() - INTERVAL '7 days'
+    WHERE bp.published_at >= NOW() - INTERVAL '30 days'
       AND sp.arxiv_id IS NULL
 ),
 stage2 AS (
@@ -102,10 +97,10 @@ stage2 AS (
         bp.published_at,
         bp.embedding,
         2::smallint AS fallback_stage,
-        '30d'::text AS candidate_window
+        '1y'::text AS candidate_window
     FROM base_papers bp
     LEFT JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
-    WHERE bp.published_at >= NOW() - INTERVAL '30 days'
+    WHERE bp.published_at >= NOW() - INTERVAL '1 year'
       AND sp.arxiv_id IS NULL
 ),
 stage3 AS (
@@ -116,20 +111,6 @@ stage3 AS (
         bp.published_at,
         bp.embedding,
         3::smallint AS fallback_stage,
-        '1y'::text AS candidate_window
-    FROM base_papers bp
-    LEFT JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
-    WHERE bp.published_at >= NOW() - INTERVAL '1 year'
-      AND sp.arxiv_id IS NULL
-),
-stage4 AS (
-    SELECT
-        bp.arxiv_id,
-        bp.title,
-        bp.abstract,
-        bp.published_at,
-        bp.embedding,
-        4::smallint AS fallback_stage,
         'all'::text AS candidate_window
     FROM base_papers bp
     LEFT JOIN seen_papers sp ON sp.arxiv_id = bp.arxiv_id
@@ -143,8 +124,6 @@ all_candidates AS (
     SELECT * FROM stage2
     UNION ALL
     SELECT * FROM stage3
-    UNION ALL
-    SELECT * FROM stage4
 ),
 scored AS (
     SELECT

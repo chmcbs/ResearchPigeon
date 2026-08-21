@@ -50,7 +50,7 @@ def _pick_row(rank=1):
         base_dense_score=0.75,
         keyword_boost=0.15,
         final_score=0.9,
-        candidate_window="run",
+        candidate_window="7d",
         fallback_stage=0,
         published_at=datetime(2026, 1, 1, 9, 30, tzinfo=timezone.utc),
         authors=[f"Author {rank}A", f"Author {rank}B"],
@@ -199,7 +199,7 @@ def test_get_test_generation_debug_includes_ranking_metadata():
     assert payload["picks"][0]["final_score"] == 0.9
     assert payload["picks"][0]["base_dense_score"] == 0.75
     assert payload["picks"][0]["keyword_boost"] == 0.15
-    assert payload["picks"][0]["candidate_window"] == "run"
+    assert payload["picks"][0]["candidate_window"] == "7d"
     assert payload["picks"][0]["fallback_stage"] == 0
 
 

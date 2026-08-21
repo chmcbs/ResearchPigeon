@@ -1,5 +1,8 @@
 """
-Generates top-K recommendations per (run_id, profile_id)
+Generates top-K recommendations per (run_id, profile_id).
+
+The live search bracket is the last 7 days of unseen papers in the run's
+category. Older windows (30d, 1y, all) only fill leftover slots.
 """
 
 import uuid
