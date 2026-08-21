@@ -1,4 +1,4 @@
-const SHOW_PAPER_DELETE_BUTTON = false;
+const SHOW_PAPER_DELETE_BUTTON = true;
 
 const authGate = document.getElementById("auth-gate");
 const feedbackApp = document.getElementById("feedback-app");
