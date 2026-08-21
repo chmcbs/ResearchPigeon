@@ -203,6 +203,16 @@ def test_get_test_generation_debug_includes_ranking_metadata():
     assert payload["picks"][0]["fallback_stage"] == 0
 
 
+def test_test_generation_request_defaults_follow_config(monkeypatch):
+    monkeypatch.setenv("INGESTION_MAX_RESULTS", "80")
+    monkeypatch.setenv("EMBEDDING_LIMIT", "240")
+
+    request = TestGenerationRequest(profile_ids=["profile-1"])
+
+    assert request.max_results == 80
+    assert request.embedding_limit == 240
+
+
 def test_run_test_generation_runs_pipeline_and_returns_picks(monkeypatch):
     monkeypatch.setenv("ALLOW_DEBUG_FEATURES", "1")
     monkeypatch.setenv("DEBUG_ADMIN_EMAILS", "admin@example.com")

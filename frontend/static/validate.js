@@ -8,6 +8,46 @@ function optionalString(value) {
   return trimmed.length ? trimmed : null;
 }
 
+var pipelineDefaults = {
+  ingestion_max_results: 150,
+  embedding_limit: 600
+};
+
+function applyPipelineDefaults(payload) {
+  if (!payload || typeof payload !== "object") {
+    return;
+  }
+  if (Number(payload.ingestion_max_results) >= 1) {
+    pipelineDefaults.ingestion_max_results = Number(payload.ingestion_max_results);
+  }
+  if (Number(payload.embedding_limit) >= 1) {
+    pipelineDefaults.embedding_limit = Number(payload.embedding_limit);
+  }
+  var maxResultsInput = document.getElementById("generate-max-results");
+  var embeddingLimitInput = document.getElementById("generate-embedding-limit");
+  if (maxResultsInput && !maxResultsInput.value) {
+    maxResultsInput.value = String(pipelineDefaults.ingestion_max_results);
+  }
+  if (embeddingLimitInput && !embeddingLimitInput.value) {
+    embeddingLimitInput.value = String(pipelineDefaults.embedding_limit);
+  }
+}
+
+async function loadPipelineDefaults() {
+  try {
+    var response = await fetch("/site-config");
+    if (!response.ok) {
+      applyPipelineDefaults(pipelineDefaults);
+      return;
+    }
+    applyPipelineDefaults(await response.json());
+  } catch (_error) {
+    applyPipelineDefaults(pipelineDefaults);
+  }
+}
+
+loadPipelineDefaults();
+
 async function run(outId, action) {
   output(outId, "Loading...");
   try {
@@ -110,8 +150,8 @@ document.getElementById("generate-btn").addEventListener("click", function () {
     }
     var body = {
       profile_ids: profileIds,
-      max_results: Number(document.getElementById("generate-max-results").value) || 150,
-      embedding_limit: Number(document.getElementById("generate-embedding-limit").value) || 600
+      max_results: Number(document.getElementById("generate-max-results").value) || pipelineDefaults.ingestion_max_results,
+      embedding_limit: Number(document.getElementById("generate-embedding-limit").value) || pipelineDefaults.embedding_limit
     };
     return apiRequest("/test-generation/run", "POST", body);
   });

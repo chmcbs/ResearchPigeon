@@ -26,6 +26,11 @@ RUN chmod +x /docker-entrypoint.sh /worker-entrypoint.sh \
 
 USER app
 
+ENV HF_HOME=/home/app/.cache/huggingface \
+    HF_HUB_DISABLE_TELEMETRY=1
+
+RUN python -c "from core.embeddings import MODEL_NAME; from sentence_transformers import SentenceTransformer; SentenceTransformer(MODEL_NAME)"
+
 EXPOSE 8000
 
 ENTRYPOINT ["/docker-entrypoint.sh"]

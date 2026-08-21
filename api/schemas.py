@@ -7,7 +7,12 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-from core.config import DEFAULT_INTEREST_TEXT, get_arxiv_categories
+from core.config import (
+    DEFAULT_INTEREST_TEXT,
+    get_arxiv_categories,
+    get_embedding_limit,
+    get_ingestion_max_results,
+)
 
 
 class PublicPick(BaseModel):
@@ -76,8 +81,8 @@ class TestGenerationDebugResponse(BaseModel):
 
 class TestGenerationRequest(BaseModel):
     profile_ids: list[str] = Field(min_length=1)
-    max_results: int = Field(default=150, ge=1)
-    embedding_limit: int = Field(default=600, ge=1)
+    max_results: int = Field(default_factory=get_ingestion_max_results, ge=1)
+    embedding_limit: int = Field(default_factory=get_embedding_limit, ge=1)
 
 
 class GenerationProfileStatus(BaseModel):

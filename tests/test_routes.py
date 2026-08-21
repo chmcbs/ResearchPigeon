@@ -242,30 +242,52 @@ def test_site_config_route_returns_product_name(monkeypatch):
     monkeypatch.setenv("PRODUCT_NAME", "Paper Radar")
     monkeypatch.delenv("SOCIAL_X_URL", raising=False)
     monkeypatch.delenv("SOCIAL_BLUESKY_URL", raising=False)
+    monkeypatch.delenv("INGESTION_MAX_RESULTS", raising=False)
+    monkeypatch.delenv("EMBEDDING_LIMIT", raising=False)
     client = TestClient(routes.app)
 
     response = client.get("/site-config")
 
     assert response.status_code == 200
-    assert response.json() == {"product_name": "Paper Radar", "social_links": {}}
+    payload = response.json()
+    assert payload["product_name"] == "Paper Radar"
+    assert payload["social_links"] == {}
+    assert payload["ingestion_max_results"] == 150
+    assert payload["embedding_limit"] == 600
 
 
 def test_site_config_route_returns_social_links(monkeypatch):
     monkeypatch.delenv("PRODUCT_NAME", raising=False)
     monkeypatch.setenv("SOCIAL_X_URL", "https://x.com/researchpigeon_")
     monkeypatch.setenv("SOCIAL_BLUESKY_URL", "https://bsky.app/profile/researchpigeon.com")
+    monkeypatch.delenv("INGESTION_MAX_RESULTS", raising=False)
+    monkeypatch.delenv("EMBEDDING_LIMIT", raising=False)
     client = TestClient(routes.app)
 
     response = client.get("/site-config")
 
     assert response.status_code == 200
-    assert response.json() == {
-        "product_name": "ResearchPigeon",
-        "social_links": {
-            "x": "https://x.com/researchpigeon_",
-            "bluesky": "https://bsky.app/profile/researchpigeon.com",
-        },
+    payload = response.json()
+    assert payload["product_name"] == "ResearchPigeon"
+    assert payload["social_links"] == {
+        "x": "https://x.com/researchpigeon_",
+        "bluesky": "https://bsky.app/profile/researchpigeon.com",
     }
+    assert payload["ingestion_max_results"] == 150
+    assert payload["embedding_limit"] == 600
+
+
+def test_site_config_route_returns_pipeline_limit_overrides(monkeypatch):
+    monkeypatch.setenv("INGESTION_MAX_RESULTS", "80")
+    monkeypatch.setenv("EMBEDDING_LIMIT", "240")
+    client = TestClient(routes.app)
+
+    response = client.get("/site-config")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ingestion_max_results"] == 80
+    assert payload["embedding_limit"] == 240
 
 
 def test_landing_profiles_and_digest_pages_are_served():

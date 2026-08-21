@@ -146,6 +146,22 @@ def test_pipeline_limit_getters_use_environment(monkeypatch):
     assert config.get_test_generation_limit_per_user() == 7
 
 
+def test_resolve_embedding_limit_uses_max_results_times_category_count():
+    assert config.resolve_embedding_limit(max_results=150, category_count=4) == 600
+    assert config.resolve_embedding_limit(max_results=150, category_count=0) == 1
+
+
+def test_resolve_embedding_limit_honors_override():
+    assert (
+        config.resolve_embedding_limit(
+            max_results=150,
+            category_count=4,
+            override=50,
+        )
+        == 50
+    )
+
+
 def test_llm_config_getters_use_environment(monkeypatch):
     monkeypatch.setenv("LLM_PROVIDER", "mock")
     monkeypatch.setenv("LLM_BASE_URL", "http://example:11434")

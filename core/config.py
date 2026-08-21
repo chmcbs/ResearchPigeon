@@ -66,6 +66,17 @@ def get_embedding_limit() -> int:
     return max(1, int(os.getenv("EMBEDDING_LIMIT", "600")))
 
 
+def resolve_embedding_limit(
+    *,
+    max_results: int,
+    category_count: int,
+    override: int | None = None,
+) -> int:
+    if override is not None:
+        return max(1, int(override))
+    return max(1, int(max_results) * max(0, int(category_count)))
+
+
 # Recommendation
 def get_daily_picks_k() -> int:
     if DEFAULT_DAILY_K < 1:

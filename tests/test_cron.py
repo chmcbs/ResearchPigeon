@@ -118,7 +118,7 @@ def test_run_daily_digest_for_all_users_runs_shared_steps_once(monkeypatch):
     run_shared.assert_called_once_with(
         categories=["cs.AI"],
         max_results=150,
-        embedding_limit=600,
+        embedding_limit=None,
     )
     assert run_recommendations.call_count == 2
     run_recommendations.assert_any_call(
@@ -799,7 +799,7 @@ def test_run_daily_digest_reuses_stored_run_ids_on_leftover_day(monkeypatch):
     run_shared.assert_called_once_with(
         categories=["cs.AI"],
         max_results=150,
-        embedding_limit=600,
+        embedding_limit=None,
         existing_run_ids=["run-from-crash"],
     )
     cron._set_window_shared_run_ids.assert_not_called()

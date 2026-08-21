@@ -221,7 +221,7 @@ def test_run_recommendations_for_profiles_skips_non_matching_runs(monkeypatch):
 
 def test_run_shared_pipeline_steps_uses_config_defaults(monkeypatch):
     monkeypatch.setenv("INGESTION_MAX_RESULTS", "111")
-    monkeypatch.setenv("EMBEDDING_LIMIT", "222")
+    monkeypatch.setenv("ARXIV_CATEGORIES", "cs.AI,cs.CL")
     monkeypatch.setattr(pipeline, "run_ingestion", Mock(return_value=["run-1"]))
     monkeypatch.setattr(pipeline, "run_embeddings", Mock(return_value=4))
 
@@ -230,6 +230,19 @@ def test_run_shared_pipeline_steps_uses_config_defaults(monkeypatch):
     pipeline.run_ingestion.assert_called_once_with(categories=None, max_results=111)
     pipeline.run_embeddings.assert_called_once_with(limit=222)
     assert summary == {"run_ids": ["run-1"], "embedded_count": 4}
+
+
+def test_run_shared_pipeline_steps_embedding_limit_override_wins(monkeypatch):
+    monkeypatch.setattr(pipeline, "run_ingestion", Mock(return_value=["run-1"]))
+    monkeypatch.setattr(pipeline, "run_embeddings", Mock(return_value=4))
+
+    pipeline.run_shared_pipeline_steps(
+        categories=["cs.AI", "cs.CL"],
+        max_results=150,
+        embedding_limit=50,
+    )
+
+    pipeline.run_embeddings.assert_called_once_with(limit=50)
 
 
 def test_all_recommendation_attempts_failed_requires_every_attempt_to_fail():

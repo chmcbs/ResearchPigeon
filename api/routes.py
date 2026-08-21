@@ -81,6 +81,8 @@ from api.schemas import (
 )
 from core.config import (
     get_arxiv_category_options,
+    get_embedding_limit,
+    get_ingestion_max_results,
     get_product_name,
     get_social_links,
     is_app_https,
@@ -244,6 +246,8 @@ def site_config() -> dict:
     return {
         "product_name": get_product_name(),
         "social_links": get_social_links(),
+        "ingestion_max_results": get_ingestion_max_results(),
+        "embedding_limit": get_embedding_limit(),
     }
 
 

@@ -57,9 +57,9 @@
       <label for="generate-profile-ids">profile_ids (comma-separated)</label>
       <input id="generate-profile-ids" placeholder="uuid-1, uuid-2">
       <label for="generate-max-results">max_results</label>
-      <input id="generate-max-results" type="number" value="150" min="1">
+      <input id="generate-max-results" type="number" min="1">
       <label for="generate-embedding-limit">embedding_limit</label>
-      <input id="generate-embedding-limit" type="number" value="600" min="1">
+      <input id="generate-embedding-limit" type="number" min="1">
       <button id="generate-btn">Run Generate</button>
       <pre id="generate-out">Trigger pipeline for explicit profile_ids (one or more UUIDs).</pre>
     </section>
@@ -105,6 +105,6 @@
   </div>
 
   <script src="/static/api-client.js"></script>
-  <script src="/static/validate.js"></script>
+  <script src="/static/validate.js?v=2"></script>
 </body>
 </html>

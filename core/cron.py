@@ -17,7 +17,6 @@ from core.db import get_database_url
 from core.logging import configure_logging, get_logger
 from core.config import (
     get_debug_admin_emails,
-    get_embedding_limit,
     get_email_from,
     get_ingestion_max_results,
     get_llm_failure_alert_threshold,
@@ -549,9 +548,6 @@ def run_daily_digest_for_all_users(
         resolved_max_results = (
             get_ingestion_max_results() if max_results is None else max_results
         )
-        resolved_embedding_limit = (
-            get_embedding_limit() if embedding_limit is None else embedding_limit
-        )
         user_ids = list_users_with_digest_selection(conn=conn)
         results: list[dict] = []
         ranked = 0
@@ -614,14 +610,14 @@ def run_daily_digest_for_all_users(
                     shared = run_shared_pipeline_steps(
                         categories=ingest_categories,
                         max_results=resolved_max_results,
-                        embedding_limit=resolved_embedding_limit,
+                        embedding_limit=embedding_limit,
                         existing_run_ids=existing_run_ids,
                     )
                 else:
                     shared = run_shared_pipeline_steps(
                         categories=ingest_categories,
                         max_results=resolved_max_results,
-                        embedding_limit=resolved_embedding_limit,
+                        embedding_limit=embedding_limit,
                     )
                     _set_window_shared_run_ids(
                         lock_conn=lock_conn,

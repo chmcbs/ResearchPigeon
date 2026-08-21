@@ -40,6 +40,25 @@ def test_run_ingestion_completes_run(monkeypatch):
     ingestion.fail_run.assert_not_called()
 
 
+def test_fetch_papers_sorts_by_submitted_date(monkeypatch):
+    captured = {}
+
+    class FakeSearch:
+        def __init__(self, **kwargs):
+            captured.update(kwargs)
+
+    fake_client = Mock()
+    fake_client.results.return_value = []
+    monkeypatch.setattr(ingestion.arxiv, "Search", FakeSearch)
+
+    ingestion.fetch_papers(category="cs.AI", max_results=10, client=fake_client)
+
+    assert captured["query"] == "cat:cs.AI"
+    assert captured["max_results"] == 10
+    assert captured["sort_by"] == ingestion.arxiv.SortCriterion.SubmittedDate
+    fake_client.results.assert_called_once()
+
+
 def test_run_ingestion_marks_run_failed(monkeypatch):
     error = RuntimeError("arxiv failed")
 

@@ -3,8 +3,9 @@ Runs the end-to-end recommendation pipeline
 """
 
 from core.config import (
-    get_embedding_limit,
+    get_arxiv_categories,
     get_ingestion_max_results,
+    resolve_embedding_limit,
 )
 from core.embeddings import run_embeddings
 from core.ingestion import fetch_run_categories, run_ingestion
@@ -115,11 +116,16 @@ def run_shared_pipeline_steps(
     existing_run_ids: list[str] | None = None,
 ) -> dict:
     configure_logging()
+    resolved_categories = (
+        list(categories) if categories is not None else get_arxiv_categories()
+    )
     resolved_max_results = (
         get_ingestion_max_results() if max_results is None else max_results
     )
-    resolved_embedding_limit = (
-        get_embedding_limit() if embedding_limit is None else embedding_limit
+    resolved_embedding_limit = resolve_embedding_limit(
+        max_results=resolved_max_results,
+        category_count=len(resolved_categories),
+        override=embedding_limit,
     )
 
     if existing_run_ids is not None:
